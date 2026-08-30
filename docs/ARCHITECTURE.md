@@ -194,9 +194,10 @@ WithdrawalStrategy ┘                  └→ summarizeRun → compare grid (ru
 - The Growth tab calls `simulateAccumulation` directly (growth-only chart never declines); the Drawdown and Compare tabs call `simulateRun` (SPEC §12: same run, different lens).
 - `scripts/table.ts` feeds a JSON file through the same engine and prints the per-year per-account table, real and nominal side by side including ATE — the reconciliation path for the M2/M3 gates.
 
-## 5. UI notes for M4+ (recorded at the M1 gate)
+## 5. UI notes for M4+ (recorded at the M1/M2 gates)
 
 - **Cash return** must surface as an editable "Cash return" field (it is stored as a per-account return-override row) so users editing the global return schedule can see why cash didn't move.
+- **Each account's effective return schedule must be visible** — precedence is: scenario override (all invested accounts) > per-account override > global schedule; cash always uses its own return (M2 gate #6).
 - **Ids** for scenarios/strategies are generated and uniqued by the UI; engine factories default to `'base'`.
 - **Second filer added** ⇒ suggest flipping `hsaCoverage` to family.
 - **Schedule rows are never re-sorted in storage** — order is semantic (later rows win); sort in the editor for display only, and append override rows for quick actions.

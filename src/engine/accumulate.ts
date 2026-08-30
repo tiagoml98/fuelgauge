@@ -70,6 +70,8 @@ interface FilerState {
   /** Match sub-balances compound inside their account; unvested fraction dropped at separation. */
   matchTrad: number;
   matchRoth: number;
+  /** Deposited Roth-match dollars — contribution basis (M2 gate #5), tracked for the vesting drop. */
+  matchRothBasis: number;
 }
 
 const INVESTED: ReadonlySet<AccountId> = new Set<AccountId>([
@@ -99,9 +101,12 @@ export function simulateAccumulation(
   });
 
   // --- resolve returns (rates, never indexed; filer-1 age domain) -----------
-  // Precedence per account: per-account override > scenario override > global.
+  // Precedence (M2 gate #6): a scenario override applies to ALL invested
+  // accounts and beats per-account overrides; cash always uses its own return.
   const returnRows = (id: AccountId): ScheduleRow[] =>
-    a.returnOverrides[id] ?? g.returnScheduleOverride ?? a.returnSchedule;
+    id === 'cash'
+      ? (a.returnOverrides.cash ?? a.returnSchedule)
+      : (g.returnScheduleOverride ?? a.returnOverrides[id] ?? a.returnSchedule);
   const returns = {} as Record<AccountId, number[]>;
   for (const id of ALL_ACCOUNTS) {
     const gross = resolveSchedule(returnRows(id), rawOpts);
@@ -151,6 +156,7 @@ export function simulateAccumulation(
       hsa: a.include.hsa ? b.hsa : 0,
       matchTrad: 0, // starting balances count as fully vested
       matchRoth: 0,
+      matchRothBasis: 0,
     };
   });
   let taxable = a.include.taxable ? a.balances.taxable : 0;
@@ -216,6 +222,18 @@ export function simulateAccumulation(
     events.push({ kind: 'note', age, label });
   };
 
+  const fmtMoney = (v: number) => Math.round(v).toLocaleString('en-US');
+  // Spec: "capped at limits" means cap AND warn — emitted every capped year.
+  const capNote = (events: MarkerEvent[], age: number, label: string, requested: number, capped: number) => {
+    if (requested > capped + 1e-9) {
+      events.push({
+        kind: 'note',
+        age,
+        label: `${label} requested ${fmtMoney(requested)}, capped at ${fmtMoney(capped)}`,
+      });
+    }
+  };
+
   // --- year 0: today ----------------------------------------------------------
   const year0Events: MarkerEvent[] = [];
   for (const id of zeroed) {
@@ -242,6 +260,9 @@ export function simulateAccumulation(
     }
     if (a.include.taxable) {
       const drag = dividendDrag(taxable, a.dividendYield, a.dividendTaxRate);
+      // Reinvested after-tax dividends are new cost basis (M2 gate bug fix):
+      // basis += start-of-year balance × yield × (1 − dividend tax rate)
+      taxableBasis += taxable * a.dividendYield * (1 - a.dividendTaxRate);
       taxable = taxable * (1 + returns.taxable[t]) - drag;
       taxPaid += drag;
     }
@@ -282,6 +303,7 @@ export function simulateAccumulation(
             s.roth401kBasis += capped.roth;
             deferralTotal = capped.trad + capped.roth;
             base401kUsed = deferralTotal - capped.catchUpUsed;
+            capNote(events, age, `401k (filer ${f + 1})`, p.c401k[t], deferralTotal);
             if (capped.forcedRothCatchUp) {
               noteOnce(`forcedRoth${f}`, events, age, `catch-up forced to Roth 401k (filer ${f + 1}) — salary above threshold`);
               if (!noted.has(`forcedRothEvent${f}`)) {
@@ -295,6 +317,7 @@ export function simulateAccumulation(
         // IRA under one shared limit
         if (p.ira[t] > 0) {
           const capped = capFilerIra(p.ira[t], ageF, limitsY);
+          capNote(events, age, `IRA (filer ${f + 1})`, p.ira[t], capped);
           if (p.inputs.backdoor) {
             if (!a.include.rothIra) {
               noteOnce(`dropIraR${f}`, events, age, `backdoor IRA (filer ${f + 1}) dropped — Roth IRA excluded`);
@@ -341,8 +364,12 @@ export function simulateAccumulation(
             s.trad401k += allowed;
             s.matchTrad += allowed;
           } else {
+            // Employer Roth match is taxed as income when made ⇒ it IS contribution
+            // basis; on rollover it becomes regular Roth IRA basis (M2 gate #5).
             s.roth401k += allowed;
-            s.matchRoth += allowed; // employer Roth match is NOT contribution basis (conservative)
+            s.roth401kBasis += allowed;
+            s.matchRoth += allowed;
+            s.matchRothBasis += allowed;
           }
         }
 
@@ -350,11 +377,14 @@ export function simulateAccumulation(
         if (p.separation !== null && ageF === p.separation && m.vestingPct < 1) {
           const dropTrad = s.matchTrad * (1 - m.vestingPct);
           const dropRoth = s.matchRoth * (1 - m.vestingPct);
+          const dropRothBasis = s.matchRothBasis * (1 - m.vestingPct);
           if (dropTrad + dropRoth > 0) {
             s.trad401k -= dropTrad;
             s.matchTrad -= dropTrad;
             s.roth401k -= dropRoth;
             s.matchRoth -= dropRoth;
+            s.roth401kBasis -= dropRothBasis;
+            s.matchRothBasis -= dropRothBasis;
             events.push({
               kind: 'note',
               age,
@@ -371,6 +401,7 @@ export function simulateAccumulation(
         } else {
           const capped = capHouseholdHsa(hsaC[t], filerAges, a.hsaCoverage, limitsY);
           if (capped > 0) {
+            capNote(events, age, 'HSA', hsaC[t], capped);
             const eligible = filerAges
               .map((av, i) => ({ age: av, i }))
               .filter((x) => x.age < HSA_CONTRIBUTION_STOP_AGE)
@@ -400,14 +431,18 @@ export function simulateAccumulation(
       }
     }
 
-    // 3. Windfalls — nominal, land at face (gate #12); per-filer targets go to filer 1
+    // 3. Windfalls — nominal, land at face (gate #12); per-filer targets go to w.filer (default filer 1)
     for (const w of g.windfalls) {
       if (w.age !== age) continue;
       if (!a.include[w.target]) {
         noteOnce(`dropWindfall${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — ${w.target} excluded`);
         continue;
       }
-      const s = filerState[0];
+      const s = filerState[w.filer ?? 0];
+      if (!s) {
+        noteOnce(`dropWindfallF${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — no filer ${(w.filer ?? 0) + 1}`);
+        continue;
+      }
       switch (w.target) {
         case 'taxable':
           taxable += w.amount;
@@ -447,12 +482,18 @@ export function simulateAccumulation(
         ['cash', cashRaw],
       ];
       for (const [label, arr] of streams) {
-        if (arr[t] < arr[t - 1]) {
-          events.push({
-            kind: 'contributionChange',
-            age,
-            label: arr[t] === 0 ? `${label} contributions stop` : `${label} contributions reduced`,
-          });
+        if (arr[t] !== arr[t - 1]) {
+          const verb =
+            arr[t] === 0
+              ? 'stop'
+              : arr[t] < arr[t - 1]
+                ? 'reduced'
+                : arr[t - 1] > 0
+                  ? 'increased'
+                  : arr.slice(0, t).some((v) => v > 0)
+                    ? 'resume'
+                    : 'start';
+          events.push({ kind: 'contributionChange', age, label: `${label} contributions ${verb}` });
         }
       }
     }

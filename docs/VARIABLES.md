@@ -135,13 +135,13 @@ All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0
 | Employer match — rate | Growth | % of deferral | n/a | 0% | 0–200% | Gate #7: match = rate × min(filer's total 401k deferral incl. Roth side, cap × salary). Zero when deferral is zero — "stop contributing at X" also loses the match |
 | Employer match — cap | Growth | % of salary | n/a | 0% | 0–25% | accumulate (M2) |
 | Employer match — flat amount | Growth | $/yr | real | $0 | ≥ 0 | accumulate (M2). Applied unconditionally (profit-sharing stand-in, ASSUMPTIONS M17) — the deferral-gated behavior is percent mode's |
-| Match destination | Growth | enum: traditional \| Roth 401k | n/a | traditional | those two | accumulate (M2) |
+| Match destination | Growth | enum: traditional \| Roth 401k | n/a | traditional | those two | accumulate (M2). Roth-destination match is **contribution basis** — taxed as income when made; becomes Roth IRA basis on rollover (M2 gate #5) |
 | Match vesting % | Growth (per-filer match config, M1 #5) | % | 100% | 0–100% | accumulate: unvested fraction dropped at that filer's separation (M2) |
 | HSA contribution schedule (household) | Growth | schedule $/yr | real | empty | ≥ 0 | limits + accumulate (M2); auto-stops at 65 |
 | Invested taxable contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2); adds to cost basis |
 | Cash contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2) |
 | Mega-backdoor schedule *(P2)* | Growth | schedule $/yr | real | empty | ≥ 0, capped by 415(c) | accumulate (M9) |
-| Windfall rows | Growth | rows {age, after-tax $, target account, label} | **nominal** — field label: "amount that lands, in that year's dollars"; UI shows today's-$ equivalent beside it (gate #12) | none; target default = invested taxable | amount ≥ 0 | accumulate (M2); adds to basis of target; chart markers (M4–M6) |
+| Windfall rows | Growth | rows {age, after-tax $, target account, label, filer?} | **nominal** — field label: "amount that lands, in that year's dollars"; UI shows today's-$ equivalent beside it (gate #12) | none; target default = invested taxable; filer default = filer 1 (M2 gate #4, matters for per-filer targets) | amount ≥ 0 | accumulate (M2); adds to basis of target; chart markers (M4–M6) |
 | Return-schedule override (optional) | Growth | rows {from age, to age, %/yr} | nominal rate | unset (use Assumptions) | −50%–+20% | accumulate (M2); enables "base / bear / stress" scenarios |
 
 ## 3. Withdrawal strategy (named, saved, many)
@@ -166,7 +166,7 @@ Rules every schedule in §1–§3 follows. `src/engine/schedule.ts` implements t
 - **Overlaps: later rows win.** Quick actions ("Stop at X," "Reduce to $Y from Z") append override rows rather than editing existing ones. An interior override wins inside its range, then the earlier row resumes (e.g. $10k 30–50 + $5k 40–45 → $5k at 40–45, $10k at 46–50).
 - **Row order is therefore semantic.** Serialization preserves array order; the UI never re-sorts rows in storage — sorting is display-only (M1 #2).
 - Dollar schedules are today's $, indexed to nominal when the toggle is on; one-time expenses likewise. **Windfalls are the exception: nominal, never indexed** (gate #12).
-- **Cash's 4% return is an ordinary per-account return-override row**, not a special case — one code path handles all returns. UI (M4): surface it as an editable "Cash return" field so users editing the global return schedule can see why cash didn't move.
+- **Cash always uses its own return** (the per-account override row, default 4%) — a scenario return override applies to all *invested* accounts and beats per-account overrides; cash is never touched by it (M2 gate #6). UI (M4): surface an editable "Cash return" field, and make each account's effective return schedule visible.
 
 ## 5. Per-run output (not inputs — the engine's contract, SPEC §6)
 
@@ -211,3 +211,14 @@ Applied before M2, in one commit, because `types.ts` freezes the serialization f
 3. **Starting Traditional IRA nondeductible basis input** (Form 8606), per filer, default $0 (§1.2).
 4. **Birth year derived** as currentYear − currentAge, not stored (§1.1; ASSUMPTIONS M22).
 5. **Vesting % lives inside the per-filer employer-match config**; match folded into the per-filer growth inputs — no parallel arrays (§2).
+
+### 7.2 M2 gate decisions (approved 2026-08-30)
+
+Confirmed as documented: return-age convention (the year ending at age N uses the return at age N — the age-51 year is the first at 5%); HSA household deposits to the youngest filer under 65; federal + state combine additively; per-filer vested match sub-balance with starting balances fully vested; excluded accounts zeroed with a note. Amended:
+
+1. **Taxable cost basis includes reinvested after-tax dividends** (bug fix): basis += contributions + start-of-year balance × yield × (1 − dividend tax rate). See ASSUMPTIONS M9.
+2. **Contribution markers fire on every change** — stop, reduce, resume, increase, and first-ever start.
+3. **Capped contributions warn** — a note "X requested N, capped at M" every capped year.
+4. **`Windfall.filer`** (optional, default filer 1) picks the owner for per-filer targets.
+5. **Roth-destination match is contribution basis** (taxed as income when made).
+6. **Return precedence**: scenario override beats per-account overrides for all invested accounts; cash always uses its own return.

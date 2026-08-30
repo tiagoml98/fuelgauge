@@ -84,7 +84,7 @@ describe('returns, fees, and the schedule boundary (SPEC §12)', () => {
 });
 
 describe('contribution schedules (SPEC §12)', () => {
-  it('contributions end at 40 → growth only from 41, with a stop marker; "$2k from 45 to 50" resumes exactly', () => {
+  it('contributions end at 40 → growth only from 41, with a stop marker; "$2k from 45 to 50" resumes exactly with a resume marker', () => {
     const a = makeA((x) => {
       x.returnSchedule = flat(0);
       x.horizonAge = 55;
@@ -104,6 +104,41 @@ describe('contribution schedules (SPEC §12)', () => {
     const stops = rowAt(years, 41).events.filter((e) => e.kind === 'contributionChange');
     expect(stops).toHaveLength(1);
     expect(stops[0].label).toContain('stop');
+    const resumes = rowAt(years, 45).events.filter((e) => e.kind === 'contributionChange');
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0].label).toContain('resume');
+  });
+
+  it('an increase emits an "increased" marker', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = flat(0);
+    });
+    const g = makeG((x) => {
+      x.perFiler[0].contrib401k = [
+        { fromAge: 31, toAge: 35, value: 4_000 },
+        { fromAge: 36, toAge: 40, value: 10_000 },
+      ];
+    });
+    const marks = rowAt(simulateAccumulation(a, g), 36).events.filter(
+      (e) => e.kind === 'contributionChange',
+    );
+    expect(marks).toHaveLength(1);
+    expect(marks[0].label).toContain('increased');
+  });
+
+  it('a capped contribution warns every capped year (cap and warn)', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = flat(0);
+    });
+    const g = makeG((x) => {
+      x.perFiler[0].contrib401k = flat(40_000, 38);
+    });
+    const years = simulateAccumulation(a, g);
+    for (const age of [38, 39, 45]) {
+      const notes = rowAt(years, age).events.filter((e) => e.label.includes('capped'));
+      expect(notes).toHaveLength(1);
+      expect(notes[0].label).toBe('401k (filer 1) requested 40,000, capped at 24,500');
+    }
   });
 
   it('a reduction emits a "reduced" marker', () => {
@@ -260,6 +295,28 @@ describe('splits, catch-ups, couples, match (SPEC §12)', () => {
 });
 
 describe('drag, HSA, IRA routing', () => {
+  it('taxable basis includes reinvested after-tax dividends (M2 gate bug fix)', () => {
+    const a = makeA((x) => {
+      x.horizonAge = 62;
+    });
+    const g = makeG((x) => {
+      x.taxableContrib = flat(10_000, 31);
+      x.windfalls = [{ age: 40, amount: 200_000, target: 'taxable', label: 'IPO' }];
+    });
+    const years = simulateAccumulation(a, g);
+    expect(rowAt(years, 32).accounts.taxable.basis).toBeCloseTo(20_170.0, 2);
+    expect(rowAt(years, 40).accounts.taxable.basis).toBeCloseTo(309_190.69, 2);
+    expect(rowAt(years, 62).accounts.taxable.basis).toBeCloseTo(863_238.52, 2);
+    const y40 = rowAt(years, 40);
+    const ateReal = toReal(
+      y40.accounts.taxable.balance -
+        (y40.accounts.taxable.balance - y40.accounts.taxable.basis) * 0.15,
+      10,
+      0.03,
+    );
+    expect(ateReal).toBeCloseTo(247_163.75, 2);
+  });
+
   it('taxable drag: 7% growth minus 2%×15% drag, drag counted as tax', () => {
     const a = makeA((x) => {
       x.balances.taxable = 10_000;
@@ -374,6 +431,62 @@ describe('ATE, indexing, excluded accounts', () => {
     expect(rowAt(years, 45).accounts.taxable.balance).toBe(0);
     expect(years[0].events.some((e) => e.label.includes('excluded'))).toBe(true);
     expect(eventsOf(years).some((e) => e.label.includes('dropped'))).toBe(true);
+  });
+
+  it('windfalls land in the designated filer\'s account; invalid filer index is dropped with a note (M2 gate #4)', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = flat(0);
+      x.filers = [{ currentAge: 30 }, { currentAge: 40 }];
+      x.balances.perFiler = [defaultFilerBalances(), defaultFilerBalances()];
+    });
+    const g = makeG((x) => {
+      x.windfalls = [
+        { age: 32, amount: 50_000, target: 'hsa', label: 'to filer 2', filer: 1 },
+        { age: 33, amount: 10_000, target: 'hsa', label: 'bad index', filer: 5 },
+      ];
+    }, 2);
+    const years = simulateAccumulation(a, g);
+    expect(rowAt(years, 32).accounts.hsa.balance).toBe(50_000);
+    expect(rowAt(years, 33).accounts.hsa.balance).toBe(50_000); // bad-index windfall dropped
+    expect(eventsOf(years).some((e) => e.label.includes('no filer 6'))).toBe(true);
+  });
+
+  it('Roth-destination match is contribution basis and vests like the balance (M2 gate #5)', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = flat(0);
+    });
+    const g = makeG((x) => {
+      x.perFiler[0].salary = [{ fromAge: 31, toAge: 33, value: 100_000 }];
+      x.perFiler[0].contrib401k = [{ fromAge: 31, toAge: 33, value: 10_000 }];
+      x.perFiler[0].split401kRothPct = 1;
+      x.perFiler[0].match = {
+        mode: 'percent',
+        rate: 0.5,
+        capPctOfSalary: 0.06,
+        flatAmount: 0,
+        destination: 'roth401k',
+        vestingPct: 0.5,
+      };
+    });
+    const years = simulateAccumulation(a, g);
+    // 30k deferrals + 9k match − 4.5k unvested drop; basis identical since match is basis
+    const y33 = rowAt(years, 33);
+    expect(y33.accounts.roth401k.balance).toBe(34_500);
+    expect(y33.accounts.roth401k.rothBasis).toBe(34_500);
+  });
+
+  it('scenario return override beats per-account overrides; cash always keeps its own return (M2 gate #6)', () => {
+    const a = makeA((x) => {
+      x.balances.perFiler[0].trad401k = 10_000;
+      x.balances.cash = 10_000;
+      x.returnOverrides.trad401k = flat(0.1);
+    });
+    const g = makeG((x) => {
+      x.returnScheduleOverride = flat(0);
+    });
+    const y1 = rowAt(simulateAccumulation(a, g), 31);
+    expect(y1.accounts.trad401k.balance).toBe(10_000); // scenario 0% wins over the 10% account override
+    expect(y1.accounts.cash.balance).toBeCloseTo(10_000 * (1 + 0.04 * 0.76), 8); // cash untouched by scenario
   });
 
   it('is deterministic: same inputs, same output', () => {

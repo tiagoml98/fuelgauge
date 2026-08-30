@@ -45,6 +45,8 @@ export interface Windfall {
   amount: number;
   target: AccountId;
   label: string;
+  /** Owner when the target is a per-filer account (M2 gate #4). Default 0 (filer 1). */
+  filer?: number;
 }
 
 export type IncomeKind = 'partTime' | 'pension' | 'socialSecurity';

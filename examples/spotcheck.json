@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "assumptions": {
+    "filers": [{ "currentAge": 30 }],
+    "filingStatus": "single",
+    "stateTaxRate": 0,
+    "currentYear": 2026,
+    "balances": {
+      "perFiler": [
+        {
+          "trad401k": 10000,
+          "tradIra": 0,
+          "tradIraBasis": 0,
+          "roth401k": 0,
+          "roth401kBasis": 0,
+          "rothIra": { "basis": 0, "conversions": [], "earnings": 0, "firstFundedYear": null },
+          "hsa": 0
+        }
+      ],
+      "taxable": 0,
+      "taxableBasis": 0,
+      "cash": 0
+    },
+    "include": {
+      "trad401k": true,
+      "tradIra": true,
+      "roth401k": true,
+      "rothIra": true,
+      "hsa": true,
+      "taxable": true,
+      "cash": true
+    },
+    "inflation": 0.03,
+    "indexWithInflation": false,
+    "returnSchedule": [{ "fromAge": 0, "toAge": null, "value": 0.07 }],
+    "returnOverrides": { "cash": [{ "fromAge": 0, "toAge": null, "value": 0.04 }] },
+    "fees": 0,
+    "dividendYield": 0.02,
+    "dividendTaxRate": 0.15,
+    "taxMode": "simple",
+    "marginalRateNow": 0.24,
+    "effectiveRetirementRate": 0.12,
+    "ltcgRate": 0.15,
+    "limits": {
+      "deferral401k": 24500,
+      "catchUp401k50": 8000,
+      "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000,
+      "ira": 7500,
+      "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400,
+      "hsaFamily": 8750,
+      "hsaCatchUp55": 1000,
+      "overall415c": 72000
+    },
+    "hsaCoverage": "selfOnly",
+    "horizonAge": 62,
+    "hsaTreatment": "medical",
+    "safeWithdrawalRate": 0.04,
+    "fireSpendingTarget": 0,
+    "coastTargetAge": 65,
+    "inPlanConversion": false,
+    "inServiceWithdrawal": false,
+    "afterTaxContributions": false
+  },
+  "growthScenarios": [
+    {
+      "id": "spot",
+      "name": "Spot check: match, match-zero years 36-37, limit cap from 38, catch-ups at 50 and 60, windfall at 40, taxable drag",
+      "perFiler": [
+        {
+          "salary": [{ "fromAge": 31, "toAge": null, "value": 100000 }],
+          "contrib401k": [
+            { "fromAge": 31, "toAge": 35, "value": 20000 },
+            { "fromAge": 38, "toAge": null, "value": 40000 }
+          ],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "match": {
+            "mode": "percent",
+            "rate": 0.5,
+            "capPctOfSalary": 0.06,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [{ "fromAge": 31, "toAge": null, "value": 10000 }],
+      "cashContrib": [],
+      "windfalls": [{ "age": 40, "amount": 200000, "target": "taxable", "label": "IPO" }]
+    },
+    {
+      "id": "spot-highearner",
+      "name": "Same as spot but salary 160k: catch-up portion must be forced to Roth 401k from age 50",
+      "perFiler": [
+        {
+          "salary": [{ "fromAge": 31, "toAge": null, "value": 160000 }],
+          "contrib401k": [
+            { "fromAge": 31, "toAge": 35, "value": 20000 },
+            { "fromAge": 38, "toAge": null, "value": 40000 }
+          ],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "match": {
+            "mode": "percent",
+            "rate": 0.5,
+            "capPctOfSalary": 0.06,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [{ "fromAge": 31, "toAge": null, "value": 10000 }],
+      "cashContrib": [],
+      "windfalls": [{ "age": 40, "amount": 200000, "target": "taxable", "label": "IPO" }]
+    }
+  ],
+  "strategies": [
+    {
+      "id": "base",
+      "name": "Base",
+      "spending": [],
+      "oneTimeExpenses": [],
+      "income": [],
+      "order": ["cash", "taxable", "preTax", "rothBasis", "seasonedConversions", "rothEarnings"]
+    }
+  ],
+  "display": { "real": false, "ate": false, "byBuckets": false, "theme": "dark", "yearlyTable": true }
+}

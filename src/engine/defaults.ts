@@ -1,6 +1,7 @@
 /**
  * The single home of every default value (CLAUDE.md: no magic numbers anywhere
- * else). Values from docs/VARIABLES.md; gate references (#N) to VARIABLES §6.
+ * else). Values from docs/VARIABLES.md; gate references (#N) to VARIABLES §7,
+ * M1 amendment references (M1 #N) to §7.1.
  *
  * Factories take `currentYear` as a parameter — the engine never reads clocks
  * (docs/ARCHITECTURE.md §4); the UI passes the real year and the user can edit it.
@@ -10,15 +11,21 @@ import type {
   AccountId,
   Assumptions,
   Bucket,
+  DisplayState,
   EmployerMatch,
   Filer,
+  FilerBalances,
   FilerGrowthInputs,
   GrowthScenario,
   LimitSet,
+  PersistedState,
   ScheduleRow,
   WithdrawalSource,
   WithdrawalStrategy,
 } from './types';
+
+/** Bump when PersistedState's shape changes; add a migration in persist.ts. */
+export const SCHEMA_VERSION = 1;
 
 // ---------------------------------------------------------------------------
 // Rates and economy
@@ -98,6 +105,7 @@ export const DEFAULT_FIRE_SPENDING_TARGET = 0;
 export const DEFAULT_COAST_TARGET_AGE = 65;
 export const DEFAULT_MATCH_VESTING_PCT = 1;
 export const DEFAULT_CURRENT_AGE = 30;
+export const DEFAULT_THEME = 'dark' as const;
 
 // ---------------------------------------------------------------------------
 // Structure
@@ -139,26 +147,31 @@ export const DEFAULT_IRA_ROTH_SPLIT = 1;
 // Factories
 // ---------------------------------------------------------------------------
 
-export function defaultFiler(currentYear: number): Filer {
+export function defaultFiler(): Filer {
+  // birthYear is derived (currentYear − currentAge), never stored (M1 #4)
+  return { currentAge: DEFAULT_CURRENT_AGE };
+}
+
+export function defaultFilerBalances(): FilerBalances {
   return {
-    currentAge: DEFAULT_CURRENT_AGE,
-    birthYear: currentYear - DEFAULT_CURRENT_AGE,
+    trad401k: 0,
+    tradIra: 0,
+    tradIraBasis: 0,
+    roth401k: 0,
+    roth401kBasis: 0,
+    rothIra: { basis: 0, conversions: [], earnings: 0, firstFundedYear: null },
+    hsa: 0,
   };
 }
 
 export function defaultAssumptions(currentYear: number): Assumptions {
   return {
-    filers: [defaultFiler(currentYear)],
+    filers: [defaultFiler()],
     filingStatus: 'single',
     stateTaxRate: DEFAULT_STATE_TAX_RATE,
     currentYear,
     balances: {
-      trad401k: 0,
-      tradIra: 0,
-      roth401k: 0,
-      roth401kBasis: 0,
-      rothIra: { basis: 0, conversions: [], earnings: 0, firstFundedYear: null },
-      hsa: 0,
+      perFiler: [defaultFilerBalances()],
       taxable: 0,
       taxableBasis: 0,
       cash: 0,
@@ -195,7 +208,17 @@ export function defaultAssumptions(currentYear: number): Assumptions {
     inPlanConversion: false,
     inServiceWithdrawal: false,
     afterTaxContributions: false,
-    matchVestingPct: DEFAULT_MATCH_VESTING_PCT,
+  };
+}
+
+export function defaultEmployerMatch(): EmployerMatch {
+  return {
+    mode: 'percent',
+    rate: 0,
+    capPctOfSalary: 0,
+    flatAmount: 0,
+    destination: 'trad401k',
+    vestingPct: DEFAULT_MATCH_VESTING_PCT,
   };
 }
 
@@ -208,16 +231,7 @@ export function defaultFilerGrowthInputs(): FilerGrowthInputs {
     splitIraRothPct: DEFAULT_IRA_ROTH_SPLIT,
     // tradIraDeductible left undefined = auto (gate #11)
     backdoor: false,
-  };
-}
-
-export function defaultEmployerMatch(): EmployerMatch {
-  return {
-    mode: 'percent',
-    rate: 0,
-    capPctOfSalary: 0,
-    flatAmount: 0,
-    destination: 'trad401k',
+    match: defaultEmployerMatch(),
   };
 }
 
@@ -226,7 +240,6 @@ export function defaultGrowthScenario(filerCount: number, id = 'base'): GrowthSc
     id,
     name: 'Base',
     perFiler: Array.from({ length: filerCount }, defaultFilerGrowthInputs),
-    match: Array.from({ length: filerCount }, defaultEmployerMatch),
     hsaContrib: [],
     taxableContrib: [],
     cashContrib: [],
@@ -246,5 +259,26 @@ export function defaultWithdrawalStrategy(a: Assumptions, id = 'base'): Withdraw
     oneTimeExpenses: [],
     income: [],
     order: [...DEFAULT_WITHDRAWAL_ORDER],
+  };
+}
+
+export function defaultDisplayState(): DisplayState {
+  return {
+    real: true,
+    ate: true,
+    byBuckets: true,
+    theme: DEFAULT_THEME,
+    yearlyTable: false,
+  };
+}
+
+export function defaultPersistedState(currentYear: number): PersistedState {
+  const assumptions = defaultAssumptions(currentYear);
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    assumptions,
+    growthScenarios: [defaultGrowthScenario(assumptions.filers.length)],
+    strategies: [defaultWithdrawalStrategy(assumptions)],
+    display: defaultDisplayState(),
   };
 }

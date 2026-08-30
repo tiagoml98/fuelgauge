@@ -1,6 +1,6 @@
 # ARCHITECTURE.md (approved home for structure + signatures — M0 deliverable)
 
-Proposed file structure and engine function list with type signatures, per SPEC §14 M0, amended by the M0 gate decisions (VARIABLES.md §6). Signatures are a design sketch; M1 implements `types.ts`/`defaults.ts`/`schedule.ts` from the approved version.
+Proposed file structure and engine function list with type signatures, per SPEC §14 M0, amended by the M0 gate decisions (VARIABLES.md §7) and the M1 gate amendments (§7.1). As of M1, `src/engine/types.ts` is the authoritative type source; the sketch in §2 tracks it at lower resolution.
 
 ## 1. File structure
 
@@ -18,6 +18,8 @@ fuelgauge/
 │   │   ├── types.ts          # M1 — all types, derived from VARIABLES.md
 │   │   ├── defaults.ts       # M1 — the single home of every default; no magic numbers elsewhere
 │   │   ├── schedule.ts       # M1 — rows → per-age array; indexing; gaps = 0; one-time rows; toReal
+│   │   ├── persist.ts        # M1 — PersistedState schemaVersion gate + migration stub (M1 #2);
+│   │   │                     #      shared by URL hash, JSON import (M4), table-script input (M2)
 │   │   ├── limits.ts         # M2 — caps, splits, catch-ups, Roth-catch-up threshold, couple summing, 415(c)
 │   │   ├── accumulate.ts     # M2 — year loop: returns net of fees (invested only), drag, cash-interest tax,
 │   │   │                     #      match (deferral-gated), vesting, windfalls, basis, Roth sub-balances
@@ -55,10 +57,17 @@ interface IncomeRow   { kind: 'partTime' | 'pension' | 'socialSecurity';
                         fromAge: number; toAge: number; amount: number; label?: string }
 interface RothConversion { year: number; amount: number; taxablePortion: number }        // gate #4
 
-interface Filer { currentAge: number; birthYear: number }      // separation age lives in the scenario (gate #2)
+interface Filer { currentAge: number }   // separation age lives in the scenario (gate #2);
+                                          // birthYear derived = currentYear − currentAge (M1 #4)
+interface FilerBalances { /* trad401k, tradIra(+basis), roth401k(+basis), rothIra, hsa — per filer (M1 #1) */ }
+interface CurrentBalances { perFiler: FilerBalances[]; taxable: number; taxableBasis: number; cash: number }
 interface Assumptions { /* every VARIABLES §1 row; incl. fireSpendingTarget, coastTargetAge */ }
-interface GrowthScenario { /* every VARIABLES §2 row; incl. perFiler.separationAge?: number override */ }
+interface GrowthScenario { /* every VARIABLES §2 row; perFiler[] carries its own EmployerMatch incl. vestingPct (M1 #5) */ }
 interface WithdrawalStrategy { /* every VARIABLES §3 row; drawdownStartAge?: number — undefined = auto */ }
+interface PersistedState {  // M1 #2 — the one serialized shape (URL hash, JSON, table-script input)
+  schemaVersion: number; assumptions: Assumptions;
+  growthScenarios: GrowthScenario[]; strategies: WithdrawalStrategy[]; display: DisplayState;
+}
 
 interface BalanceSnapshot {                     // one account, one year-end
   balance: number; basis: number;               // taxable & cash basis; trad IRA nondeductible basis (gate #11)
@@ -184,3 +193,10 @@ WithdrawalStrategy ┘                  └→ summarizeRun → compare grid (ru
 - UI state (three layers + display toggles) serializes to URL hash and JSON in `src/state/` (M4); the engine is a pure function of its arguments — same inputs, same outputs, no clocks, no I/O (the calendar-year anchor is an input).
 - The Growth tab calls `simulateAccumulation` directly (growth-only chart never declines); the Drawdown and Compare tabs call `simulateRun` (SPEC §12: same run, different lens).
 - `scripts/table.ts` feeds a JSON file through the same engine and prints the per-year per-account table, real and nominal side by side including ATE — the reconciliation path for the M2/M3 gates.
+
+## 5. UI notes for M4+ (recorded at the M1 gate)
+
+- **Cash return** must surface as an editable "Cash return" field (it is stored as a per-account return-override row) so users editing the global return schedule can see why cash didn't move.
+- **Ids** for scenarios/strategies are generated and uniqued by the UI; engine factories default to `'base'`.
+- **Second filer added** ⇒ suggest flipping `hsaCoverage` to family.
+- **Schedule rows are never re-sorted in storage** — order is semantic (later rows win); sort in the editor for display only, and append override rows for quick actions.

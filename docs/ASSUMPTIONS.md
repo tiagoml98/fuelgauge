@@ -1,6 +1,6 @@
 # ASSUMPTIONS.md
 
-Every simplification the model makes, with the direction of bias it introduces. This file and the in-app assumptions panel must stay in sync: adding an assumption means adding it in both, in the same commit (CLAUDE.md). Amended at the M0 gate (2026-08-30); gate decision numbers refer to VARIABLES.md §6.
+Every simplification the model makes, with the direction of bias it introduces. This file and the in-app assumptions panel must stay in sync: adding an assumption means adding it in both, in the same commit (CLAUDE.md). Amended at the M0 and M1 gates (2026-08-30); gate decision numbers refer to VARIABLES.md §7, M1 amendment numbers to §7.1.
 
 > **Prominent disclaimer (always visible in-app):** This is an educational model built on simplifying assumptions. It is not tax advice, financial advice, or a prediction. Confirm real decisions with a CPA.
 
@@ -20,7 +20,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | T8 | Backdoor pro-rata rule is a warning, not modeled — the backdoor executes cleanly even with a Traditional IRA balance, and its conversion is recorded with taxablePortion = 0 | → backdoor looks cleaner | Real pro-rata tax can make the backdoor expensive |
 | T9 | Flat state tax rate applied uniformly; no state brackets, no state LTCG distinction | neutral-ish | Understates progressivity in high-tax states |
 | T10 | No FICA/payroll tax modeling; salary exists for the match cap, the Roth-catch-up threshold, separation derivation, and the equal-take-home comparison | neutral | |
-| T11 | Mandatory Roth catch-up (gate #10) is modeled, but the threshold is compared against **same-year modeled salary**, not prior-year FICA wages, and indexed by model inflation rather than IRS COLA | neutral, small | The real rule looks at last year's W-2 Box 3 |
+| T11 | Mandatory Roth catch-up (gate #10) is modeled, but the real rule keys on **prior-year W-2 (Box 3) wages from that employer**; the model compares **current-year modeled salary**, and indexes the threshold by model inflation rather than IRS COLA | neutral, small | Off by one year around the threshold and blind to job changes |
 | T12 | No phase-outs: IRA deductibility is handled by the gate #11 default + basis tracking, Roth IRA income limits by the backdoor toggle — never enforced as law | → IRA strategies look freer | |
 | T13 | LTCG is a flat rate even in years when income would qualify for the 0% bracket | → against taxable | Overstates tax on taxable sales in low-income years (e.g. the bridge) |
 | T14 | Cash interest is taxed at two flat rates: marginal-now in accumulation, effective in drawdown | neutral-ish | A two-rate stand-in for ordinary-income treatment (gate #8) |
@@ -51,6 +51,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | M19 | The Growth tab is a growth-only lens — no withdrawals ever, labeled "growth only — no withdrawals" | neutral (definitional) | The same run declines on the Drawdown tab (SPEC §12) |
 | M20 | Windfalls are nominal ("amount that lands, in that year's dollars"); one-time expenses are today's dollars, indexed — both labeled at the input | neutral (definitional) | Gate #12 |
 | M21 | Fees apply to invested accounts only, never cash | neutral (definitional) | Gate #8 |
+| M22 | Birth year is derived as currentYear − currentAge, not entered (M1 #4) | neutral, small | Affects only the RMD 73/75 boundary and the 60–63 catch-up window, by at most one year |
 
 ## 3. Out of scope — never modeled (SPEC §11)
 

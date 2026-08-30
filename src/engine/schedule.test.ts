@@ -58,6 +58,20 @@ describe('resolveSchedule', () => {
     expect(at(out, 30, 55)).toBe(4000);
   });
 
+  it('M1 gate #6: an interior override wins inside its range, then the earlier row resumes', () => {
+    const rows: ScheduleRow[] = [
+      { fromAge: 30, toAge: 50, value: 10000 },
+      { fromAge: 40, toAge: 45, value: 5000 },
+    ];
+    const out = resolveSchedule(rows, opts());
+    expect(at(out, 30, 39)).toBe(10000);
+    expect(at(out, 30, 40)).toBe(5000);
+    expect(at(out, 30, 45)).toBe(5000);
+    expect(at(out, 30, 46)).toBe(10000);
+    expect(at(out, 30, 50)).toBe(10000);
+    expect(at(out, 30, 51)).toBe(0);
+  });
+
   it('toAge null runs to endAge', () => {
     const out = resolveSchedule([{ fromAge: 50, toAge: null, value: 7 }], opts());
     expect(at(out, 30, 49)).toBe(0);

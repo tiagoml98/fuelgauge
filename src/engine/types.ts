@@ -1,6 +1,7 @@
 /**
- * All model types, derived from docs/VARIABLES.md (M0-approved, incl. gate decisions §6).
- * Types only — no logic, no React. Gate references (#N) point to VARIABLES.md §6.
+ * All model types, derived from docs/VARIABLES.md (M0-approved plus M1 gate
+ * amendments). Types only — no logic, no React. Gate references (#N) point to
+ * VARIABLES.md §7; M1 amendment references (M1 #N) to VARIABLES.md §7.1.
  */
 
 export type AccountId =
@@ -75,10 +76,13 @@ export interface RothConversion {
 // Assumptions layer (VARIABLES §1)
 // ---------------------------------------------------------------------------
 
-/** Separation age lives in the growth scenario (gate #2), not here. */
+/**
+ * Separation age lives in the growth scenario (gate #2), not here.
+ * Birth year is NOT stored — derive it as currentYear − currentAge (M1 #4;
+ * ≤1-year error on the RMD 73/75 boundary and the 60–63 window, ASSUMPTIONS M22).
+ */
 export interface Filer {
   currentAge: number;
-  birthYear: number;
 }
 
 export interface RothIraState {
@@ -86,25 +90,36 @@ export interface RothIraState {
   conversions: RothConversion[];
   earnings: number;
   /**
-   * Starts the 5-year clock. null = first year the model sees Roth IRA funding;
-   * a rollover counts as funding (gate #17 / ASSUMPTIONS M11).
+   * Starts this filer's 5-year clock. null = first year the model sees Roth IRA
+   * funding; a rollover counts as funding (gate #17 / ASSUMPTIONS M11).
    */
   firstFundedYear: number | null;
 }
 
-export interface CurrentBalances {
+/**
+ * M1 #1: retirement accounts are per filer — rule of 55, 59½, the Roth clock,
+ * catch-ups, and RMDs are per filer, so the money must know its owner.
+ */
+export interface FilerBalances {
   trad401k: number;
-  /** Nondeductible basis accrues during simulation (gate #11); no starting-basis input. */
   tradIra: number;
+  /** M1 #3: existing nondeductible basis (Form 8606), default 0; gate-#11 accruals add to it. */
+  tradIraBasis: number;
   roth401k: number;
   /** Gate #3: default 0 — unentered Roth 401k balance is treated as earnings (conservative). */
   roth401kBasis: number;
   rothIra: RothIraState;
   hsa: number;
+}
+
+export interface CurrentBalances {
+  /** Aligned with Assumptions.filers (same index = same filer). */
+  perFiler: FilerBalances[];
+  /** Household. */
   taxable: number;
   /** 0 ≤ basis ≤ balance; default = balance. */
   taxableBasis: number;
-  /** Basis = balance; interest taxed annually (gate #8). */
+  /** Household. Basis = balance; interest taxed annually (gate #8). */
   cash: number;
 }
 
@@ -190,8 +205,6 @@ export interface Assumptions {
   inPlanConversion: boolean;
   inServiceWithdrawal: boolean;
   afterTaxContributions: boolean;
-  /** 0–1. Unvested match dropped at that filer's separation (scenario-derived, gate #2). */
-  matchVestingPct: number;
 
   /**
    * Editable auto-fill (SPEC §2): index = filer; own-age access ages. Unset accounts
@@ -222,6 +235,8 @@ export interface FilerGrowthInputs {
   tradIraDeductible?: boolean;
   /** Routes the IRA contribution to Roth as a conversion with taxablePortion 0 (gate #4). */
   backdoor: boolean;
+  /** M1 #5: match config lives with its filer — one object, no parallel arrays. */
+  match: EmployerMatch;
 }
 
 export type MatchMode = 'percent' | 'flat';
@@ -238,15 +253,16 @@ export interface EmployerMatch {
   /** Today's $/yr. */
   flatAmount: number;
   destination: 'trad401k' | 'roth401k';
+  /** M1 #5: 0–1; the unvested fraction is dropped at this filer's separation. */
+  vestingPct: number;
 }
 
 export interface GrowthScenario {
+  /** Unique id — generating/uniquing ids is the UI's responsibility (factories default to 'base'). */
   id: string;
   name: string;
-  /** Aligned with Assumptions.filers. */
+  /** Aligned with Assumptions.filers; match is per filer salary (SPEC §12). */
   perFiler: FilerGrowthInputs[];
-  /** Aligned with Assumptions.filers — match is per filer salary (SPEC §12). */
-  match: EmployerMatch[];
   /** Household schedule; contributions auto-stop at 65 (SPEC §2). */
   hsaContrib: ScheduleRow[];
   taxableContrib: ScheduleRow[];
@@ -284,6 +300,7 @@ export interface ConversionLadderRow {
 }
 
 export interface WithdrawalStrategy {
+  /** Unique id — generating/uniquing ids is the UI's responsibility (factories default to 'base'). */
   id: string;
   name: string;
   /**
@@ -332,6 +349,7 @@ export interface MarkerEvent {
 /**
  * Per filer (array index), per source: the owner's own age at which it unlocks.
  * 'rothEarnings' is the effective age satisfying both 59½ and the 5-year clock.
+ * A missing key means accessible from the start (taxable, cash, Roth basis).
  */
 export type AccessMap = Array<Partial<Record<AccountId | 'rothEarnings', number>>>;
 
@@ -396,4 +414,37 @@ export interface BridgeReport {
   spendAtStart: number;
   /** Inflated annual spend at the latest access age. */
   spendAtAccess: number;
+}
+
+// ---------------------------------------------------------------------------
+// Persistence (M1 #2) — URL hash + JSON export/import share this shape
+// ---------------------------------------------------------------------------
+
+/** UI display toggles (VARIABLES §6) — never read by the engine. */
+export interface DisplayState {
+  /** true = real (today's $) display — the default lens. */
+  real: boolean;
+  /** true = ATE display (SPEC §4 default), false = gross. */
+  ate: boolean;
+  /** true = four buckets (default), false = by account. */
+  byBuckets: boolean;
+  theme: 'dark' | 'light';
+  /** false = 5-year balance table (default), true = yearly. */
+  yearlyTable: boolean;
+  selectedScenarioId?: string;
+  selectedStrategyId?: string;
+}
+
+/**
+ * The single serialized shape (M1 #2). schemaVersion gates migrations
+ * (src/engine/persist.ts). NOTE: schedule-row array order is SEMANTIC — the
+ * overlap rule is "later rows win" — so serialization preserves row order and
+ * the UI must never re-sort rows in storage; sort for display only.
+ */
+export interface PersistedState {
+  schemaVersion: number;
+  assumptions: Assumptions;
+  growthScenarios: GrowthScenario[];
+  strategies: WithdrawalStrategy[];
+  display: DisplayState;
 }

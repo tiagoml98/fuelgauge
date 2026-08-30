@@ -75,13 +75,11 @@ describe('defaultAssumptions', () => {
     expect(a.coastTargetAge).toBe(65);
     expect(a.hsaTreatment).toBe('medical');
     expect(a.taxMode).toBe('simple');
-    expect(a.matchVestingPct).toBe(1);
   });
 
-  it('anchors one filer to the passed calendar year', () => {
+  it('stores one filer with age only — birth year is derived, never stored (M1 #4)', () => {
     expect(a.filers).toHaveLength(1);
-    expect(a.filers[0].currentAge).toBe(30);
-    expect(a.filers[0].birthYear).toBe(1996);
+    expect(a.filers[0]).toEqual({ currentAge: 30 });
     expect(a.currentYear).toBe(2026);
     expect(a.filingStatus).toBe('single');
   });
@@ -98,25 +96,31 @@ describe('defaultAssumptions', () => {
     for (const id of ALL_ACCOUNTS) expect(a.include[id]).toBe(true);
   });
 
-  it('starts with zero balances, taxable basis = balance, Roth 401k all-earnings', () => {
-    expect(a.balances.taxableBasis).toBe(a.balances.taxable);
-    expect(a.balances.roth401kBasis).toBe(0); // gate #3: unentered = earnings
-    expect(a.balances.rothIra.firstFundedYear).toBeNull();
+  it('splits balances per filer vs household (M1 #1) with documented zeros', () => {
+    expect(a.balances.perFiler).toHaveLength(1); // aligned with filers
+    const fb = a.balances.perFiler[0];
+    expect(fb.tradIraBasis).toBe(0); // M1 #3: Form 8606 basis input
+    expect(fb.roth401kBasis).toBe(0); // gate #3: unentered = earnings
+    expect(fb.rothIra.firstFundedYear).toBeNull();
+    expect(a.balances.taxableBasis).toBe(a.balances.taxable); // household
   });
 });
 
 describe('defaultGrowthScenario', () => {
-  it('creates per-filer inputs with documented splits and auto deductible', () => {
+  it('creates per-filer inputs with documented splits, auto deductible, and per-filer match (M1 #5)', () => {
     const g = defaultGrowthScenario(2);
     expect(g.perFiler).toHaveLength(2);
-    expect(g.match).toHaveLength(2);
     for (const f of g.perFiler) {
       expect(f.split401kRothPct).toBe(0); // all traditional
       expect(f.splitIraRothPct).toBe(1); // all Roth
       expect(f.tradIraDeductible).toBeUndefined(); // gate #11: auto
       expect(f.backdoor).toBe(false);
+      expect(f.match.mode).toBe('percent');
+      expect(f.match.destination).toBe('trad401k');
+      expect(f.match.vestingPct).toBe(1); // vesting lives in the match now
     }
     expect(g.perFiler[0]).not.toBe(g.perFiler[1]); // independent objects
+    expect(g.perFiler[0].match).not.toBe(g.perFiler[1].match);
     expect(g.windfalls).toEqual([]);
   });
 });

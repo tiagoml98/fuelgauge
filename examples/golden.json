@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "assumptions": {
+    "filers": [{ "currentAge": 30 }],
+    "filingStatus": "single",
+    "stateTaxRate": 0,
+    "currentYear": 2026,
+    "balances": {
+      "perFiler": [
+        {
+          "trad401k": 10000,
+          "tradIra": 0,
+          "tradIraBasis": 0,
+          "roth401k": 0,
+          "roth401kBasis": 0,
+          "rothIra": { "basis": 0, "conversions": [], "earnings": 0, "firstFundedYear": null },
+          "hsa": 0
+        }
+      ],
+      "taxable": 0,
+      "taxableBasis": 0,
+      "cash": 0
+    },
+    "include": {
+      "trad401k": true,
+      "tradIra": true,
+      "roth401k": true,
+      "rothIra": true,
+      "hsa": true,
+      "taxable": true,
+      "cash": true
+    },
+    "inflation": 0.03,
+    "indexWithInflation": false,
+    "returnSchedule": [{ "fromAge": 0, "toAge": null, "value": 0.07 }],
+    "returnOverrides": { "cash": [{ "fromAge": 0, "toAge": null, "value": 0.04 }] },
+    "fees": 0,
+    "dividendYield": 0.02,
+    "dividendTaxRate": 0.15,
+    "taxMode": "simple",
+    "marginalRateNow": 0.24,
+    "effectiveRetirementRate": 0.12,
+    "ltcgRate": 0.15,
+    "limits": {
+      "deferral401k": 24500,
+      "catchUp401k50": 8000,
+      "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000,
+      "ira": 7500,
+      "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400,
+      "hsaFamily": 8750,
+      "hsaCatchUp55": 1000,
+      "overall415c": 72000
+    },
+    "hsaCoverage": "selfOnly",
+    "horizonAge": 45,
+    "hsaTreatment": "medical",
+    "safeWithdrawalRate": 0.04,
+    "fireSpendingTarget": 0,
+    "coastTargetAge": 65,
+    "inPlanConversion": false,
+    "inServiceWithdrawal": false,
+    "afterTaxContributions": false
+  },
+  "growthScenarios": [
+    {
+      "id": "golden",
+      "name": "Golden number (SPEC §12): P=10k in trad 401k, C=5k/yr ages 31-40, r=7%, no fees, indexing off",
+      "perFiler": [
+        {
+          "salary": [],
+          "contrib401k": [{ "fromAge": 31, "toAge": 40, "value": 5000 }],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "match": {
+            "mode": "percent",
+            "rate": 0,
+            "capPctOfSalary": 0,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [],
+      "cashContrib": [],
+      "windfalls": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "base",
+      "name": "Base",
+      "spending": [],
+      "oneTimeExpenses": [],
+      "income": [],
+      "order": ["cash", "taxable", "preTax", "rothBasis", "seasonedConversions", "rothEarnings"]
+    }
+  ],
+  "display": { "real": true, "ate": true, "byBuckets": true, "theme": "dark", "yearlyTable": false }
+}

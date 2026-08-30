@@ -1,0 +1,182 @@
+# VARIABLES.md
+
+Every input to the model, one row each. Source of truth for `src/engine/types.ts` (M1) and `src/engine/defaults.ts` (M1). Derived from SPEC.md v6 §1–§7, amended by the M0 gate decisions (§6 below).
+
+**Columns.** *Real/nominal:* what the user enters. All schedules are entered in today's dollars and indexed to nominal when "index with inflation" is on (SPEC §4); the engine computes in nominal internally. **Exception: windfalls are nominal — the amount that lands, in that year's dollars (gate #12).** *Consumed by:* the engine module (see `docs/ARCHITECTURE.md`) that reads the variable, with its milestone.
+
+**Two-filer timeline (gate #1).** Every unqualified "age" in the model — return schedule, spending, windfalls, one-time expenses, drawdown start, horizon, chart axis — is **filer 1's age**. Filer 2's age at any model age = model age + (filer2.currentAge − filer1.currentAge). Per-filer items (salary, 401k, IRA, catch-ups, access ages, RMD age, separation age) use that filer's own age.
+
+*(P2)* = Phase 2, listed now so types reserve space; not implemented until M7–M10.
+
+---
+
+## 1. Assumptions (global, one set)
+
+### 1.1 Filers and filing
+
+| Name | Layer | Unit | Real/nominal | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|---|
+| Filer count | Assumptions | 1 or 2 | n/a | 1 | {1, 2} | everything per-filer |
+| Current age — per filer | Assumptions | age | n/a | 30 | 18–90 | accumulate (M2), access (M3), limits (M2); filer-2 offset per the timeline rule |
+| Birth year — per filer | Assumptions | year | n/a | current year − current age | 1930–2010 | access/RMD age (M3, used M10) |
+| Filing status | Assumptions | enum: single \| married-joint | n/a | single (1 filer) / married-joint (2) | those two | tax: bracket mode (M7); UI labels |
+| Flat state-tax rate | Assumptions | % | n/a (rate) | 0% | 0–15% | tax (M2/M3) |
+| Current calendar year | Assumptions | year | n/a | auto (system clock, editable) | 2020–2100 | schedule indexing anchor (M1); conversion seasoning (M3); RMD age (M10) |
+
+> Planned separation age moved to the **Growth layer** (per filer, per scenario) at the M0 gate — see §2 and gate #2.
+
+### 1.2 Current balances (seven accounts, SPEC §2)
+
+All balances are **nominal** (today's actual dollars). All default to $0, valid range ≥ 0, consumed by accumulate (M2) as year-0 starting state.
+
+| Name | Layer | Unit | Notes |
+|---|---|---|---|
+| Traditional 401k balance | Assumptions | $ | Pre-tax bucket |
+| Traditional IRA balance | Assumptions | $ | Pre-tax bucket; drives backdoor pro-rata warning. Nondeductible contributions accrue in a basis sub-field (gate #11), recovered pro rata tax-free on withdrawal |
+| Roth 401k balance | Assumptions | $ | Roth bucket |
+| Roth 401k — contribution basis | Assumptions | $ | Gate #3. Default $0 — unentered balance is treated as earnings (conservative). Forward contributions tracked as basis. On rollover: basis → Roth IRA basis, earnings → Roth IRA earnings |
+| Roth IRA — contribution basis | Assumptions | $ | Withdrawable any time |
+| Roth IRA — conversions, rows {year, amount, taxablePortion} | Assumptions | rows: year + $ + $ | Gate #4. Seasoning (5 tax years from conversion year) applies **only to the taxable portion**; the nontaxable portion is accessible immediately. Within each conversion, IRS ordering: taxable first, then nontaxable. Backdoor contributions are recorded as conversions with taxablePortion = 0 (pro-rata ignored per ASSUMPTIONS T8) — never locked. Ladder conversions *(P2)* have taxablePortion = amount → access (M3) |
+| Roth IRA — earnings | Assumptions | $ | Locked until 59½ **and** 5 years since first funding |
+| Roth IRA — first-funded year | Assumptions | year | Starts the 5-year clock; blank = first year the model sees Roth IRA funding — a rollover counts as funding (starts the clock if no Roth IRA existed before) |
+| HSA balance | Assumptions | $ | Contributions auto-stop at 65 |
+| Invested taxable balance | Assumptions | $ | Taxable bucket |
+| Invested taxable — current cost basis | Assumptions | $ | 0 ≤ basis ≤ balance; default = balance. Consumed by accumulate (M2), ate (M2), tax on sale (M3) |
+| Cash balance | Assumptions | $ | Basis = balance; interest taxed annually (gate #8) |
+| Include toggle — per account (×7) | Assumptions | bool | true — accumulate/drawdown skip excluded accounts entirely |
+
+### 1.3 Economy and returns
+
+| Name | Layer | Unit | Real/nominal | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|---|
+| Inflation | Assumptions | %/yr | n/a (rate) | 3% | 0–15% | schedule indexing (M1), toReal (M1), real-return math (M2) |
+| Index with inflation | Assumptions | bool | on | — | schedule (M1), limits (M2) |
+| Return schedule by age | Assumptions | rows {from age, to age, %/yr} | nominal rate | 7% until 50, 5% after | −20%–+20% per row | accumulate (M2), drawdown growth (M3) |
+| Per-account return override (×7, optional) | Assumptions | rows, same shape | nominal rate | unset (use global); **Cash: 4%** (SPEC §2) | same | accumulate (M2) |
+| Fees / expense ratio | Assumptions | %/yr | n/a (rate) | **0.1%** (gate #15) | 0–2% | accumulate (M2): subtracted from return on **invested accounts only — never cash** (gate #8) |
+| Dividend yield (taxable drag) | Assumptions | %/yr | n/a (rate) | 2% | 0–10% | accumulate: drag on invested taxable only (M2) |
+| Dividend tax rate | Assumptions | % | n/a (rate) | 15% | 0–40% | accumulate: drag (M2) |
+
+**Cash taxation (gate #8):** cash interest is ordinary income, taxed annually — at the marginal-now rate during accumulation, at the effective retirement rate during drawdown (bracket mode: the schedule, M7).
+
+### 1.4 Taxes (simple mode; bracket mode is M7)
+
+| Name | Layer | Unit | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|
+| Tax mode | Assumptions | enum: simple \| bracket *(P2)* | simple | those two | tax (M2/M3, M7) |
+| Marginal rate now | Assumptions | % | 24% | 0–50% | cash-interest tax in accumulation (M2), trad-vs-Roth comparison §8 (M6), conversion tax *(P2)* |
+| Effective rate on pre-tax withdrawals (labeled "effective") | Assumptions | % | 12% | 0–50% | ate (M2), drawdown gross-up (M3), cash-interest tax in drawdown (M3), simple-mode retirement-income tax (M3, gate #9) |
+| LTCG rate | Assumptions | % | 15% | 0–30% | ate (M2), tax on taxable sale (M3) |
+| Standard deduction + bracket tables per filing status *(P2)* | Assumptions | table rows | current IRS, editable, indexed | — | tax (M7) |
+
+### 1.5 Contribution limits (editable, indexed when toggle on)
+
+2026 IRS values, **verified 2026-08-30** against IRS announcements (IR-2025-111, Notice 2025-67); confirmed correct at the M0 gate. Consumed by limits (M2). Catch-ups keyed to filer age in the year; couple = limits applied per filer, then summed (SPEC §12).
+
+| Name | Unit | Default (2026) | Valid range | Notes |
+|---|---|---|---|---|
+| 401k employee deferral limit | $/yr | $24,500 | ≥ 0 | Shared across traditional + Roth 401k split |
+| 401k catch-up, age 50+ | $/yr | $8,000 | ≥ 0 | |
+| 401k catch-up, ages 60–63 | $/yr | $11,250 | ≥ 0 | Replaces (not stacks on) the 50+ catch-up in those years; back to 50+ amount at 64 |
+| Roth catch-up wage threshold | $/yr | $150,000 | ≥ 0 | Gate #10. If a filer's salary exceeds this (indexed by model inflation), that filer's 401k catch-up portion goes to **Roth 401k regardless of split**, with a note when it triggers. Simplification: compared against same-year modeled salary, not prior-year FICA wages (ASSUMPTIONS T11) |
+| IRA limit | $/yr | $7,500 | ≥ 0 | Shared across traditional + Roth IRA split |
+| IRA catch-up, age 50+ | $/yr | $1,100 | ≥ 0 | |
+| HSA limit — self-only | $/yr | $4,400 | ≥ 0 | |
+| HSA limit — family | $/yr | $8,750 | ≥ 0 | |
+| HSA catch-up, age 55+ | $/yr | $1,000 | ≥ 0 | Household HSA with two filers 55+ gets both catch-ups — simplification, real catch-ups need separate HSAs (ASSUMPTIONS M18) |
+| HSA coverage type | enum: self-only \| family | family (2 filers) / self-only (1) | those two | Picks which HSA limit applies |
+| 415(c) overall limit | $/yr | $72,000 | ≥ 0 | Caps deferrals + match + after-tax; age-based catch-ups sit outside it. Binds for mega-backdoor *(P2)* |
+
+### 1.6 Horizon, policy, plan toggles, FIRE targets
+
+| Name | Layer | Unit | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|
+| Planning horizon | Assumptions | age (filer 1) | 90 | > current age, ≤ 105 | every engine step; charts end here |
+| HSA treatment | Assumptions | enum: medical \| non-medical | medical | those two | ate (M2), drawdown order (M3) |
+| Safe withdrawal rate | Assumptions | % | 4% (tooltip: ~30 years) | 1–10% | metrics: FIRE number (M3) |
+| FIRE spending target | Assumptions | $/yr, today's $ | $0 (metrics show "—") | ≥ 0 | Gate #13: Growth-tab metrics (M3/M4); default spending row of a new withdrawal strategy |
+| Coast FIRE target age | Assumptions | age (filer 1) | 65 | > current age, ≤ horizon | Gate #13: Growth-tab Coast FIRE metric; drawdown-start fallback default (§3). Growth-tab metrics labeled "vs target spend $X, target age Y" |
+| In-plan conversion allowed | Assumptions | bool | off | — | ladder *(P2)* |
+| In-service withdrawal allowed | Assumptions | bool | off | — | mega-backdoor *(P2)* |
+| After-tax contributions allowed | Assumptions | bool | off | — | mega-backdoor *(P2)* |
+| Match vesting % | Assumptions | % | 100% | 0–100% | accumulate: unvested match dropped at separation (M2) |
+
+### 1.7 Access ages (auto-derived, editable — SPEC §2, gate #2/#6)
+
+| Name | Layer | Unit | Default | Consumed by |
+|---|---|---|---|---|
+| Pre-tax access age — per filer per pre-tax account | Assumptions (auto-filled from the growth scenario) | age (own age) | 59½; Traditional 401k auto-fills to the **scenario's** separation age when separation ≥ 55 (rule of 55), shown editable. `computeAccessAges(assumptions, scenario)` | access (M3) |
+| Roth-earnings access | — | derived | 59½ **and** 5 years since Roth IRA first funding | access (M3) |
+| RMD start age — per filer | — | derived from birth year | 73 (born 1951–59), 75 (1960+) | rmd (M10) |
+| Integer-year treatment of 59½ | — | rule (confirmed at gate) | money is accessible from the first drawdown year in which the filer's age at the start of the year ≥ the access age (59½ → the year they turn 60; rule-of-55 age 56 → the year they turn 56). Conservative — never unlocks early | access (M3) |
+
+---
+
+## 2. Growth scenario (named, saved, many)
+
+All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0, indexed when the toggle is on (SPEC §5). Per-filer schedules are in **that filer's own age**. Resolved by schedule (M1); applied by accumulate (M2). Contributions are applied only before the paired strategy's drawdown start age (SPEC §1); schedules extending past it are cut with a note.
+
+| Name | Layer | Unit | Real/nominal | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|---|
+| Scenario name | Growth | text | n/a | "Base" | non-empty | UI, compare grid |
+| Salary schedule — per filer | Growth | schedule $/yr | real | empty | ≥ 0 | match cap (M2), Roth-catch-up threshold (M2), separation-age derivation (below), take-home comparison §8 (M6) |
+| Separation age — per filer | Growth | age (own age) | derived: **last age with salary > 0 in this scenario**; editable override | ≥ current age | Gate #2. access: rule of 55 (M3); accumulate: match vesting (M2); run: rollover timing (M3); drawdown-start default (§3). If salary ends before the paired strategy's drawdown start, the run emits: "ages X–Y have no income and no spending modeled" |
+| 401k total contribution schedule — per filer | Growth | schedule $/yr | real | empty | ≥ 0 | limits + accumulate (M2) |
+| 401k traditional/Roth split — per filer | Growth | % to Roth | n/a | 0% (all traditional) | 0–100% | accumulate (M2); overridden for the catch-up portion when the Roth catch-up threshold triggers (gate #10) |
+| IRA total contribution schedule — per filer | Growth | schedule $/yr | real | empty | ≥ 0 | limits + accumulate (M2) |
+| IRA traditional/Roth split — per filer | Growth | % to Roth | n/a | 100% (all Roth) | 0–100% | accumulate (M2) |
+| Traditional IRA deductible — per filer | Growth | bool | **"no" if that filer has a 401k schedule in this scenario, else "yes"** (gate #11) | — | tax (M2). Non-deductible + backdoor off → warn, and track the contribution as Traditional IRA basis, recovered pro rata tax-free on withdrawal — never taxed twice |
+| Backdoor toggle — per filer | Growth | bool | off | — | accumulate (M2): routes IRA contribution to Roth, recorded as a conversion with taxablePortion = 0 (gate #4); pro-rata **warning** if trad IRA balance > 0 |
+| Employer match — mode | Growth | enum: percent \| flat | n/a | percent | those two | accumulate (M2) |
+| Employer match — rate | Growth | % of deferral | n/a | 0% | 0–200% | Gate #7: match = rate × min(filer's total 401k deferral incl. Roth side, cap × salary). Zero when deferral is zero — "stop contributing at X" also loses the match |
+| Employer match — cap | Growth | % of salary | n/a | 0% | 0–25% | accumulate (M2) |
+| Employer match — flat amount | Growth | $/yr | real | $0 | ≥ 0 | accumulate (M2). Applied unconditionally (profit-sharing stand-in, ASSUMPTIONS M17) — the deferral-gated behavior is percent mode's |
+| Match destination | Growth | enum: traditional \| Roth 401k | n/a | traditional | those two | accumulate (M2); vested portion per vesting % at separation |
+| HSA contribution schedule (household) | Growth | schedule $/yr | real | empty | ≥ 0 | limits + accumulate (M2); auto-stops at 65 |
+| Invested taxable contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2); adds to cost basis |
+| Cash contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2) |
+| Mega-backdoor schedule *(P2)* | Growth | schedule $/yr | real | empty | ≥ 0, capped by 415(c) | accumulate (M9) |
+| Windfall rows | Growth | rows {age, after-tax $, target account, label} | **nominal** — field label: "amount that lands, in that year's dollars"; UI shows today's-$ equivalent beside it (gate #12) | none; target default = invested taxable | amount ≥ 0 | accumulate (M2); adds to basis of target; chart markers (M4–M6) |
+| Return-schedule override (optional) | Growth | rows {from age, to age, %/yr} | nominal rate | unset (use Assumptions) | −50%–+20% | accumulate (M2); enables "base / bear / stress" scenarios |
+
+## 3. Withdrawal strategy (named, saved, many)
+
+| Name | Layer | Unit | Real/nominal | Default | Valid range | Consumed by |
+|---|---|---|---|---|---|---|
+| Strategy name | Withdrawal | text | n/a | "Base" | non-empty | UI, compare grid |
+| Drawdown start age | Withdrawal | age (filer 1) | n/a | auto: **earliest filer separation age in the paired growth scenario; if the scenario has no salary rows (no separation derivable), the Coast FIRE target age** — reconciles gate #13 and #15 | > current age, ≤ horizon | run (M3): contributions cut here, withdrawals begin at start of this year; rollover timing per gate #6 |
+| Spending schedule | Withdrawal | schedule $/yr | real (today's $) | one row: FIRE spending target from drawdown start to horizon (gate #13) | ≥ 0 | drawdown need (M3), FIRE number (M3) |
+| One-time expense rows | Withdrawal | rows {age, amount, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need (M3) |
+| Retirement income rows | Withdrawal | rows {type: part-time \| pension \| social-security, from age, to age, $/yr, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need offset (M3). **Simple mode taxes them (gate #9): part-time and pension at the effective rate, Social Security at 85% × effective.** Bracket mode (M7): brackets, SS 85% taxable |
+| Withdrawal order | Withdrawal | ordered list of sources | n/a | **cash → invested taxable → pre-tax (once ≥ access age) → Roth basis → seasoned conversions → Roth earnings (once ≥ access age)**; HSA excluded under "medical" (gate #5 — corrects SPEC §1) | permutation | drawdown (M3). The access filter makes it self-adjusting: before access age, pre-tax is skipped and Roth basis fills the bridge; after, pre-tax goes first |
+| Conversion ladder rows *(P2)* | Withdrawal | rows {from, to, $} or {from, to, fill to top of N% bracket} | real | none | ≥ 0 | ladder (M8); taxablePortion = amount |
+
+## 4. Per-run output (not inputs — the engine's contract, SPEC §6)
+
+Per age per run: balance per account and per bucket (gross and ATE), cost basis, Roth sub-balances, total, accessible, locked, cumulative tax paid, gap flag, and marker events (windfalls, contribution changes, drawdown start, access ages). Summary per run: lifetime after-tax spending, terminal ATE at horizon, **years retired = horizon − drawdown start**, **first gap age (reported separately)**, earliest gap-free drawdown age (computed lazily, memoized — up to ~60 runs per cell), bridge funded ✓/✗, cumulative tax (SPEC §3 Compare; gate #E3).
+
+## 5. Display state (UI only — never read by the engine)
+
+Real/nominal toggle (default **real**), ATE/gross toggle (default ATE, SPEC §4), buckets/by-account toggle (default buckets, SPEC §2), balance-table granularity (5-yr/1-yr), theme (dark/light), selected scenario/strategy/cells. All serialized to URL hash + JSON along with the three state layers. Real values everywhere come from the engine's `toReal(value, yearsFromNow)` (gate #14) — the UI never does its own inflation math.
+
+## 6. M0 gate decisions (approved 2026-08-30)
+
+Deviations from SPEC and additions beyond it, as approved at the M0 gate. Numbers are referenced throughout this file and in ASSUMPTIONS.md.
+
+1. **Two-filer timeline** — unqualified ages are filer 1's; filer 2 offset by age difference; per-filer items in own age.
+2. **Separation age is per filer, per growth scenario** — derived as last age with salary > 0, editable; rule of 55, vesting, and rollover timing follow the scenario. Salary-end/drawdown-start gap emits a note.
+3. **Roth 401k basis tracked** — starting-basis input (default $0 = all earnings, conservative); forward contributions are basis; rollover maps basis→basis, earnings→earnings.
+4. **Conversions carry `taxablePortion`** — seasoning applies to the taxable portion only; nontaxable accessible immediately; taxable-first ordering within each conversion; backdoor = conversion with taxablePortion 0.
+5. **Withdrawal order corrected** — pre-tax (access-gated) ahead of Roth basis; SPEC §1's order superseded.
+6. **Rollover timing** — Traditional 401k → Traditional IRA at the **later of drawdown start and 59½** (its access age absent rule of 55), so rule-of-55 withdrawals come from the plan until 59½; Roth 401k → Roth IRA at drawdown start. Assumes the plan permits partial withdrawals under rule of 55.
+7. **Match formula** — rate × min(total 401k deferral incl. Roth, cap × salary); zero when deferral is zero; flat mode unconditional (profit-sharing stand-in); vested at separation.
+8. **Cash** — interest taxed annually as ordinary income (marginal now / effective in drawdown); fees never apply to cash.
+9. **Simple mode taxes retirement income** — pension and part-time at effective; SS at 85% × effective.
+10. **Mandatory Roth catch-up modeled** — salary above indexed threshold ($150k, 2026) forces the catch-up portion to Roth 401k, with a note.
+11. **Traditional IRA deductible default** — "no" with a 401k schedule, else "yes"; non-deductible contributions tracked as IRA basis, recovered pro rata tax-free.
+12. **Windfalls are nominal** — labeled "amount that lands, in that year's dollars," today's-$ equivalent shown beside; SPEC §12 test wording fixed to match.
+13. **FIRE metrics inputs** — Assumptions-level FIRE spending target + Coast FIRE target age; seed new strategies' spending and (via the fallback in #15) drawdown start; Growth-tab metrics labeled with them.
+14. **ate.ts in M2; engine-side `toReal`** — the M2 table shows ATE, prints real and nominal side by side; metrics and UI use `toReal`.
+15. **Defaults** — fees 0.1%; drawdown start auto = earliest separation age in the paired scenario, falling back to Coast FIRE target age when the scenario has no salary *(reconciliation of gate items 13 & 15 — flagged for review in the M1 plan)*; real display default; all §6.10 defaults from the original M0 review approved.
+16. **Household HSA gets both 55+ catch-ups** — simplification (real catch-ups need separate HSAs).
+17. **Calendar-year anchor, taxable cost-basis input, Roth first-funded fallback** (rollover counts as funding), **59½ rounding rule** — approved as proposed.

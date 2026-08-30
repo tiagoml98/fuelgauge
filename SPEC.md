@@ -115,7 +115,7 @@ Monte Carlo or any probabilistic engine; IRMAA; ACA subsidy modeling; 72(t)/SEPP
 - Golden number: P = 10,000, C = 5,000/yr end-of-year, r = 7%, n = 10 → FV = P(1+r)^n + C·((1+r)^n − 1)/r, to the cent. With 3% inflation and real display → nominal ÷ 1.03^10.
 - Fees: 7% with 0.5% fees compounds at 6.5%. Return schedule: 7% to 50 then 5% → year 51 uses 5%.
 - Schedules: contributions end at 40 → growth only from 41; "$2,000 from 45 to 50" resumes exactly then.
-- **Windfall:** $200k at 32 to taxable → taxable balance at 32 is exactly $200k (inflated if indexed) higher than the same run without it; a labeled vertical marker appears at 32 on Growth, Drawdown, and Compare charts.
+- **Windfall:** $200k at 32 to taxable → taxable balance at 32 is exactly $200k higher than the same run without it (windfalls are nominal — the amount that lands in that year's dollars, never indexed); a labeled vertical marker appears at 32 on Growth, Drawdown, and Compare charts.
 - Split: 401k $20k at 50% Roth → $10k each under one shared limit; catch-up at 50 and higher catch-up at 60–63. Couple: limits summed, match per filer salary.
 - ATE: pre-tax-only portfolio = gross × (1 − rate). Coast FIRE matches a hand-computed case.
 - **Growth tab is growth-only:** the growth chart of a run never declines after drawdown start; the Drawdown tab chart of the same run does.

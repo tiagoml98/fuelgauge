@@ -22,37 +22,75 @@ test('renders spotcheck.json and drawdown.json states', async ({ page }) => {
   await expect(page.getByText('after tax at 90', { exact: false })).toBeVisible();
 });
 
-test('no text truncation at default, min, and max panel widths', async ({ page }) => {
+test('the divider tracks the cursor during a real drag; width persists on release (M4.5 #1)', async ({ page }) => {
   await loadState(page, exampleState('spotcheck'));
   await expectNoTruncation(page, 'inputs-panel');
 
   const handle = page.locator('[data-slot="resizable-handle"]');
-  const box = (await handle.boundingBox())!;
-  // drag to min
-  await page.mouse.move(box.x + 2, box.y + 200);
+  const start = (await handle.boundingBox())!;
+  const y = start.y + 200;
+  const startX = start.x + start.width / 2;
+  await page.mouse.move(startX, y);
   await page.mouse.down();
-  await page.mouse.move(box.x - 600, box.y + 200, { steps: 5 });
+  // the divider must follow the cursor within a few px at every step — the
+  // laggy-trailing bug fails exactly this
+  for (const dx of [40, 90, 140]) {
+    await page.mouse.move(startX + dx, y, { steps: 3 });
+    const b = (await handle.boundingBox())!;
+    expect(Math.abs(b.x + b.width / 2 - (startX + dx))).toBeLessThan(6);
+  }
+  await page.mouse.up();
+  const s = await readState(page);
+  expect(s.display.panelWidth).toBeGreaterThan(500); // committed the dragged width
+  await expectNoTruncation(page, 'inputs-panel');
+
+  // drag hard left → clamps at min, still no truncation
+  const b2 = (await handle.boundingBox())!;
+  await page.mouse.move(b2.x + b2.width / 2, y);
+  await page.mouse.down();
+  await page.mouse.move(b2.x - 700, y, { steps: 6 });
   await page.mouse.up();
   await expectNoTruncation(page, 'inputs-panel');
-  let s = await readState(page);
-  expect(s.display.panelWidth).toBeGreaterThanOrEqual(299);
-  expect(s.display.panelWidth).toBeLessThanOrEqual(320);
+  const s2 = await readState(page);
+  expect(s2.display.panelWidth).toBeGreaterThanOrEqual(299);
+  expect(s2.display.panelWidth).toBeLessThanOrEqual(320);
 
-  // drag wider
-  const box2 = (await handle.boundingBox())!;
-  await page.mouse.move(box2.x + 2, box2.y + 200);
-  await page.mouse.down();
-  await page.mouse.move(box2.x + 900, box2.y + 200, { steps: 8 });
-  await page.mouse.up();
-  await expectNoTruncation(page, 'inputs-panel');
-  s = await readState(page);
-  expect(s.display.panelWidth).toBeGreaterThan(400); // grew past the default
-
-  // exact max width, loaded from persisted state (deterministic)
+  // reload with the maximum persisted width — the saved-width render path
   const maxed = exampleState('spotcheck');
   maxed.display = { ...maxed.display, panelWidth: 640 };
   await loadState(page, maxed);
   await expectNoTruncation(page, 'inputs-panel');
+});
+
+test('columns scroll independently and the page itself never scrolls (M4.5 #2)', async ({ page }) => {
+  const state = exampleState('spotcheck');
+  state.display = { ...state.display, inputsTier: 'basics', yearlyTable: true };
+  await loadState(page, state);
+  const canvas = page.locator('canvas').first();
+  const chartBefore = (await canvas.boundingBox())!;
+  const panel = page.getByTestId('inputs-panel');
+  const panelBox = (await panel.boundingBox())!;
+
+  // wheel over the LEFT panel: panel content moves, chart stays put, page still
+  await page.mouse.move(panelBox.x + panelBox.width / 2, panelBox.y + 200);
+  await page.mouse.wheel(0, 600);
+  await page.waitForTimeout(150);
+  expect((await panel.evaluate((el) => el.scrollTop))).toBeGreaterThan(0);
+  const chartAfterLeft = (await canvas.boundingBox())!;
+  expect(Math.abs(chartAfterLeft.y - chartBefore.y)).toBeLessThan(2);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+
+  // wheel over the RIGHT column: it scrolls, the panel doesn't move further
+  const panelScroll = await panel.evaluate((el) => el.scrollTop);
+  const column = page.getByTestId('chart-column');
+  const colBox = (await column.boundingBox())!;
+  await page.mouse.move(colBox.x + colBox.width / 2, colBox.y + 100);
+  await page.mouse.wheel(0, 600);
+  await page.waitForTimeout(150);
+  expect(await column.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  expect(await panel.evaluate((el) => el.scrollTop)).toBe(panelScroll);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(() => document.body.scrollHeight - window.innerHeight)).toBeLessThanOrEqual(1);
 });
 
 test('Advanced tier shows every group and persists the tier choice', async ({ page }) => {

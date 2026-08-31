@@ -8,11 +8,23 @@
 import { Switch } from '@/components/ui/switch';
 import type { Assumptions, GrowthScenario } from '../../engine/types';
 import { useStore } from '../../state/store';
-import { FieldRow, HintCard, MoneyInput, PercentInput, AgeInput, SectionHeading } from './inputs';
+import { Group } from './Group';
+import { AgeInput, FieldRow, HintCard, MoneyInput, PercentInput } from './inputs';
 import { ScheduleControl } from './ScheduleControl';
 
 export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
-  const { dispatch } = useStore();
+  const { state, dispatch } = useStore();
+  // M4.5 item 4: same collapsible sections as Advanced, collapse persisted
+  const collapsed = new Set(state.display.basicsCollapsed ?? []);
+  const section = (id: string) => ({
+    open: !collapsed.has(id),
+    onOpenChange: (open: boolean) => {
+      const next = new Set(collapsed);
+      if (open) next.delete(id);
+      else next.add(id);
+      dispatch({ type: 'patchDisplay', patch: { basicsCollapsed: [...next] } });
+    },
+  });
   const patchA = (patch: Partial<Assumptions>) => dispatch({ type: 'patchAssumptions', patch });
   const patchG = (patch: Partial<GrowthScenario>) =>
     dispatch({ type: 'patchScenario', id: g.id, patch });
@@ -46,8 +58,7 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
         }
       />
 
-      <div>
-        <SectionHeading title="Balances today" hint="what's already saved, per account" />
+      <Group title="Balances today" hint="what's already saved, per account" {...section('balances')}>
         <FieldRow label="Traditional 401k" control={<MoneyInput value={b.trad401k} min={0} onCommit={(v) => patchB({ trad401k: v })} aria-label="Traditional 401k balance" />} />
         <FieldRow
           label="Roth IRA"
@@ -76,10 +87,9 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           }
         />
         <FieldRow label="Cash" control={<MoneyInput value={a.balances.cash} min={0} onCommit={(v) => patchA({ balances: { ...a.balances, cash: v } })} aria-label="Cash balance" />} />
-      </div>
+      </Group>
 
-      <div>
-        <SectionHeading title="Contributions" hint="per year, today's dollars" />
+      <Group title="Contributions" hint="per year, today's dollars — plus salary and match" {...section('contributions')}>
         <ScheduleControl
           label="401k"
           description="traditional by default — Roth split in Advanced"
@@ -123,10 +133,6 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           startAge={startAge}
           endAge={a.horizonAge}
         />
-      </div>
-
-      <div>
-        <SectionHeading title="Work" hint="salary drives the match and the catch-up rules" />
         <ScheduleControl
           label="Salary"
           rows={pf.salary}
@@ -145,10 +151,9 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           }
           controlWidth="w-[9.5rem]"
         />
-      </div>
+      </Group>
 
-      <div>
-        <SectionHeading title="Economy" />
+      <Group title="Economy" hint="return and inflation" {...section('economy')}>
         <ScheduleControl
           label="Investment return"
           description="one flat rate; use “Lower to…” to step it down at an age — cash keeps its own return"
@@ -172,12 +177,15 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
             </div>
           }
         />
+      </Group>
+
+      <Group title="FIRE target" hint="powers the FIRE metrics and the hero readout" {...section('fire')}>
         <FieldRow
           label="FIRE spending target"
-          description="what a retired year costs, today's dollars — powers the FIRE metrics"
+          description="what a retired year costs, today's dollars"
           control={<MoneyInput value={a.fireSpendingTarget} min={0} onCommit={(v) => patchA({ fireSpendingTarget: v })} aria-label="FIRE spending target" />}
         />
-      </div>
+      </Group>
 
       {noMoney && (
         <HintCard>

@@ -86,36 +86,51 @@ export function HeroCard({
               after tax at {last.age}, in today's dollars
             </span>
           </div>
+          {/* M4.5 item 5: discrete statements as inline-blocks — line breaks fall
+              only BETWEEN statements; number+unit pairs are non-breaking */}
           <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-400">
-            {metrics.fireNumber !== null ? (
-              <>
-                Your FIRE number is <strong className="tnum">{fmtMoneyM(metrics.fireNumber)}</strong>{' '}
-                ({fmtMoney0(a.fireSpendingTarget)} a year ÷{' '}
-                {(a.safeWithdrawalRate * 100).toFixed(0)}%).{' '}
-                {metrics.coastAge !== null ? (
+            {(metrics.fireNumber !== null
+              ? [
                   <>
-                    From <strong>age {metrics.coastAge}</strong> you could stop saving entirely and
-                    still reach it by {a.coastTargetAge}.{' '}
-                  </>
-                ) : (
-                  <>On this path it isn't reached by {a.coastTargetAge} without more saving. </>
-                )}
-              </>
-            ) : (
-              <>Set a FIRE spending target under Basics to see your FIRE number and Coast age. </>
-            )}
-            {metrics.millionAge !== null && (
-              <>
-                First million (gross, real): <strong>age {metrics.millionAge}</strong>.
-              </>
-            )}
-            {metrics.baristaAge !== null && (
-              <>
-                {' '}
-                Barista FIRE with {fmtMoney0(a.baristaIncomeTarget ?? 0)}/yr part-time:{' '}
-                <strong>age {metrics.baristaAge}</strong>.
-              </>
-            )}
+                    Your FIRE number is <strong className="tnum">{fmtMoneyM(metrics.fireNumber)}</strong>{' '}
+                    ({fmtMoney0(a.fireSpendingTarget)}{' '}a{' '}year{' '}÷{' '}
+                    {(a.safeWithdrawalRate * 100).toFixed(0)}%).
+                  </>,
+                  metrics.coastAge !== null ? (
+                    <>
+                      From <strong>age{' '}{metrics.coastAge}</strong> you could stop saving and
+                      still reach it by{' '}{a.coastTargetAge}.
+                    </>
+                  ) : (
+                    <>Not reached by{' '}{a.coastTargetAge} without more saving.</>
+                  ),
+                ]
+              : [<>Set a FIRE spending target under Basics to see your FIRE number and Coast age.</>]
+            )
+              .concat(
+                metrics.millionAge !== null
+                  ? [
+                      <>
+                        First million (gross,{' '}real): <strong>age{' '}{metrics.millionAge}</strong>.
+                      </>,
+                    ]
+                  : [],
+              )
+              .concat(
+                metrics.baristaAge !== null
+                  ? [
+                      <>
+                        Barista FIRE with {fmtMoney0(a.baristaIncomeTarget ?? 0)}/yr part-time:{' '}
+                        <strong>age{' '}{metrics.baristaAge}</strong>.
+                      </>,
+                    ]
+                  : [],
+              )
+              .map((statement, i) => (
+                <span key={i} data-testid="hero-statement" className="mr-1.5 inline-block max-w-full">
+                  {statement}
+                </span>
+              ))}
           </p>
         </>
       )}

@@ -5,6 +5,7 @@
 
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useRef } from 'react';
 import { DEFAULT_PANEL_WIDTH } from '../../engine/defaults';
 import { useGrowthMetrics, useGrowthYears } from '../../state/derived';
 import { useSelectedScenario, useStore } from '../../state/store';
@@ -22,17 +23,24 @@ export function GrowthTabV2() {
   const metrics = useGrowthMetrics(a, scenario, years);
   const d = state.display;
   const tier = d.inputsTier ?? 'basics';
+  // M4.5 item 1: the panel library moves the divider imperatively (DOM styles);
+  // React state NEVER updates during the drag — we track the live width in a
+  // ref and commit it to display state once, on pointer release.
+  const liveWidth = useRef(d.panelWidth ?? DEFAULT_PANEL_WIDTH);
+  const commitWidth = () => {
+    const px = Math.round(liveWidth.current);
+    if (px !== d.panelWidth) dispatch({ type: 'patchDisplay', patch: { panelWidth: px } });
+  };
 
   return (
-    /* fixed height: the two columns scroll independently — the chart stays on screen */
-    <ResizablePanelGroup orientation="horizontal" className="h-[calc(100vh-7rem)]">
+    /* h-full inside the viewport-height app frame: the two columns scroll independently */
+    <ResizablePanelGroup orientation="horizontal" className="h-full">
       <ResizablePanel
         defaultSize={d.panelWidth ?? DEFAULT_PANEL_WIDTH}
         minSize={300}
         maxSize={640}
         onResize={(size) => {
-          const px = Math.round(size.inPixels);
-          if (px !== d.panelWidth) dispatch({ type: 'patchDisplay', patch: { panelWidth: px } });
+          liveWidth.current = size.inPixels;
         }}
       >
         <aside className="h-full overflow-y-auto pr-4" data-testid="inputs-panel">
@@ -52,9 +60,15 @@ export function GrowthTabV2() {
           {tier === 'basics' ? <BasicsPanel a={a} g={scenario} /> : <AdvancedPanel a={a} g={scenario} />}
         </aside>
       </ResizablePanel>
-      <ResizableHandle withHandle />
+      <ResizableHandle
+        withHandle
+        onPointerUp={commitWidth}
+        onLostPointerCapture={commitWidth}
+        /* wider visible bar + generous hit target (after: pseudo) */
+        className="w-1 bg-neutral-200 transition-colors after:w-4 hover:bg-neutral-400 data-[resize-handle-state=drag]:bg-neutral-500 dark:bg-neutral-800 dark:hover:bg-neutral-600"
+      />
       <ResizablePanel>
-        <main className="h-full space-y-4 overflow-y-auto pl-4">
+        <main className="h-full space-y-4 overflow-y-auto pl-4" data-testid="chart-column">
           {errors.length > 0 && (
             <p
               role="status"

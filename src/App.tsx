@@ -21,8 +21,10 @@ function Shell() {
 
   return (
     <div className={dark ? 'dark' : ''}>
-      <div className="min-h-screen bg-[#f6f5f2] font-sans text-neutral-900 dark:bg-[#0d0d0d] dark:text-neutral-100">
-        <header className="mx-auto flex max-w-[1560px] flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-1 pt-3">
+      {/* M4.5 item 2: viewport-height frame — the PAGE never scrolls; each
+          column below is its own scroll container */}
+      <div className="flex h-screen flex-col overflow-hidden bg-[#f6f5f2] font-sans text-neutral-900 dark:bg-[#0d0d0d] dark:text-neutral-100">
+        <header className="mx-auto flex w-full max-w-[1560px] shrink-0 flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-1 pt-3">
           <span className="text-[17px] font-bold tracking-tight">FuelGauge</span>
           <nav className="flex gap-4 text-sm" aria-label="Tabs">
             <span className="border-b-2 border-neutral-900 pb-0.5 font-medium dark:border-neutral-100">Growth</span>
@@ -70,7 +72,7 @@ function Shell() {
           </div>
         </header>
 
-        <p className="mx-auto max-w-[1560px] px-5 pb-2 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+        <p className="mx-auto w-full max-w-[1560px] shrink-0 px-5 pb-2 text-[11px] font-medium text-amber-700 dark:text-amber-400">
           Educational model on simplifying assumptions — not tax or financial advice. Confirm real
           decisions with a CPA.
         </p>
@@ -84,7 +86,7 @@ function Shell() {
           </p>
         )}
 
-        <div className="mx-auto max-w-[1560px] px-5 pb-6">
+        <div className="mx-auto min-h-0 w-full max-w-[1560px] flex-1 px-5 pb-4">
           <TabErrorBoundary>
             <GrowthTabV2 />
           </TabErrorBoundary>

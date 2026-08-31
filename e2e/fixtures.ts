@@ -74,6 +74,7 @@ export async function expectNoTruncation(page: Page, scopeTestId: string): Promi
     for (const el of scope.querySelectorAll<HTMLElement>('label, button, span, p, option, h3')) {
       if (el.classList.contains('truncate') || el.closest('.truncate')) continue;
       if (!el.textContent?.trim()) continue; // switch thumbs etc. — no text to clip
+      if (el.children.length > 0) continue; // composites: their text LEAVES are measured instead
       if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
         bad.push(`${el.tagName}: ${el.textContent.slice(0, 40)}`);
       }

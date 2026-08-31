@@ -5,10 +5,12 @@ test that exercises it. **Gate criterion: 100% of this manifest.** Regenerated a
 every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
-`LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec. Every test runs
-under the auto console guard (fixtures.ts): **zero console errors/warnings after every
-interaction** or the test fails. `PS:maximal` = the maximal-state round-trip, which sets every
-field to a non-default value and deep-equals it through hash → reload → export → import.
+`LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
+polish.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
+round-trip, which sets every field to a non-default value and deep-equals it through hash →
+reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
+user-visible outcomes (positions, rendered text) from real pointer/keyboard input.
 
 ## 1. PersistedState fields (schema v1) — 62/62
 
@@ -67,8 +69,9 @@ field to a non-default value and deep-equals it through hash → reload → expo
 | display.theme | PS:maximal · LN:theme |
 | display.yearlyTable | PS:maximal · LN:yearly |
 | display.selectedScenarioId / selectedStrategyId | PS:maximal · LN:scenario-menu |
-| display.panelWidth | PS:maximal · LT:resize (drag persists) |
+| display.panelWidth | PS:maximal · LT:divider-drag (real drag persists on release) |
 | display.inputsTier | PS:maximal · LT:advanced-tier |
+| display.basicsCollapsed | PO:basics-sections (collapse + reload persistence) |
 
 ## 2. VARIABLES.md rows — 71/71
 
@@ -92,7 +95,12 @@ completeness: schedule semantics → SE (normalize) + unit scheduleOps/schedule 
 | Export JSON / Import JSON (+ corrupt-file error) | PS:export-import · PS:corrupt-import |
 | Disclaimer strip | LT:empty-state |
 | Basics/Advanced tier tabs | LT:advanced-tier |
-| Panel resize handle (drag, min/max, persisted) | LT:resize |
+| Panel resize handle — divider tracks the cursor within px during a REAL drag; min clamp; saved-width render | LT:divider-drag |
+| Independent column scrolling (page never scrolls) | LT:scroll-independence |
+| Basics collapsible sections (shared Group, persisted collapse) | PO:basics-sections |
+| Steppers: money ±1,000 / ⇧ ±10,000; age ±1; percent ±0.1; ↑/↓ keys; hold-to-repeat; clamping | PO:stepper tests (×3) — applies to every DraftNumberInput-family field |
+| Hero readout statements — never split across lines at three widths | PO:hero-statements |
+| Radius token scale — no pills; computed radii ≤ 6px on card/input/tab/button/badge + screenshot artifact | PO:radius |
 | Basics: Your age | NI:partial-typing |
 | Basics: 5 balance fields | NI (leading-zeros, enter, invalid, escape) — one per behavior, same component class |
 | Basics: 5 contribution ScheduleControls (simple amount + until age) | SE:simple-mode · PS:maximal |
@@ -130,4 +138,4 @@ completeness: schedule semantics → SE (normalize) + unit scheduleOps/schedule 
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-**Manifest: 207/207 items covered (62 + 71 + 74).**
+**Manifest: 214/214 items covered (63 state fields + 71 VARIABLES rows + 80 controls).**

@@ -21,3 +21,4 @@ Vite + React + TypeScript, Tailwind, ECharts (echarts-for-react), Vitest. Pure c
 - Gate report format: what was built; test count and status; how to run it; exactly what to check; any assumption made that isn't in the spec.
 - When a gate approval includes fixes, land them in their own commit and report the verification numbers before starting the next milestone.
 - UI milestones require a green e2e suite at 100% manifest coverage (e2e/COVERAGE.md) and an exploratory browser QA pass with console-error monitoring before the gate report.
+- UI tests must assert user-visible outcomes (element positions, rendered text, what's on screen after a real pointer/scroll/keyboard interaction), not internal state or programmatic APIs. If a feature can fail by hand while its test passes, the test is wrong and gets rewritten alongside the fix.

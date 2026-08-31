@@ -7,11 +7,6 @@
 
 import { Button } from '@/components/ui/button';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,7 +14,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { type ReactNode } from 'react';
 import { toReal } from '../../engine/schedule';
 import type {
   AccountId,
@@ -32,23 +26,9 @@ import type {
 } from '../../engine/types';
 import { useStore } from '../../state/store';
 import { ACCOUNT_LABELS, ACCOUNT_ORDER } from '../theme/colors';
+import { Group } from './Group';
 import { AgeInput, DraftNumberInput, FieldRow, fmtMoney0, MoneyInput, PercentInput } from './inputs';
 import { ScheduleControl } from './ScheduleControl';
-
-function Group({ title, hint, children, defaultOpen = false }: { title: string; hint?: string; children: ReactNode; defaultOpen?: boolean }) {
-  return (
-    <Collapsible defaultOpen={defaultOpen} className="border-b border-neutral-200 py-2 dark:border-neutral-800">
-      <CollapsibleTrigger className="group flex w-full items-center justify-between py-1 text-left">
-        <div>
-          <h3 className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-200">{title}</h3>
-          {hint && <p className="text-xs text-neutral-500 dark:text-neutral-400">{hint}</p>}
-        </div>
-        <span className="text-neutral-400 transition-transform group-data-[state=open]:rotate-45">＋</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>{children}</CollapsibleContent>
-    </Collapsible>
-  );
-}
 
 const YearInput = ({ value, onCommit, label }: { value: number | null; onCommit: (v: number | null) => void; label: string }) => (
   <DraftNumberInput

@@ -8,7 +8,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 export interface DraftNumberProps {
   value: number;
@@ -24,6 +24,12 @@ export interface DraftNumberProps {
   className?: string;
   'aria-label'?: string;
   invalidMessage?: string;
+  /**
+   * M4.5 item 3: stepper increment in display units (buttons + ↑/↓ keys,
+   * hold-to-repeat). Stepping commits immediately and clamps; ⇧ uses bigStep.
+   */
+  step?: number;
+  bigStep?: number;
 }
 
 const groups = (v: number) =>
@@ -47,10 +53,15 @@ export function DraftNumberInput({
   placeholder,
   className,
   invalidMessage = 'enter a number',
+  step = 1,
+  bigStep,
   ...aria
 }: DraftNumberProps) {
   const [draft, setDraft] = useState<string | null>(null); // null = showing committed value
   const [invalid, setInvalid] = useState(false);
+  const latest = useRef(value); // hold-to-repeat must see fresh commits
+  latest.current = value;
+  const repeat = useRef<{ delay?: ReturnType<typeof setTimeout>; tick?: ReturnType<typeof setInterval> }>({});
 
   // External value changed (import, quick action) while not editing → reflect it
   useEffect(() => {
@@ -71,14 +82,38 @@ export function DraftNumberInput({
     }
   };
 
+  // Stepping always commits (the result is always valid) and clamps
+  const stepBy = (dir: 1 | -1, big: boolean) => {
+    const base = draft !== null ? (parse(draft) ?? latest.current) : latest.current;
+    const size = big && bigStep !== undefined ? bigStep : step;
+    let next = Math.round((base + dir * size) * 1e6) / 1e6;
+    if (min !== undefined) next = Math.max(min, next);
+    if (max !== undefined) next = Math.min(max, next);
+    latest.current = next;
+    onCommit(next);
+    setDraft(null);
+    setInvalid(false);
+  };
+  const stopRepeat = () => {
+    clearTimeout(repeat.current.delay);
+    clearInterval(repeat.current.tick);
+  };
+  const startRepeat = (dir: 1 | -1, big: boolean) => {
+    stepBy(dir, big);
+    repeat.current.delay = setTimeout(() => {
+      repeat.current.tick = setInterval(() => stepBy(dir, big), 60);
+    }, 400);
+  };
+  useEffect(() => stopRepeat, []);
+
   return (
     <div className={cn('relative', className)}>
       <Input
         {...aria}
         inputMode="decimal"
         className={cn(
-          'h-8 bg-white text-right text-sm tnum dark:bg-neutral-900',
-          suffix && 'pr-7',
+          'h-8 bg-white pr-5 text-right text-sm tnum dark:bg-neutral-900',
+          suffix && 'pr-9',
           invalid && 'border-red-400 focus-visible:ring-red-300 dark:border-red-700',
         )}
         value={draft ?? format(value)}
@@ -99,13 +134,33 @@ export function DraftNumberInput({
             setDraft(null);
             setInvalid(false);
           }
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            stepBy(e.key === 'ArrowUp' ? 1 : -1, e.shiftKey);
+          }
         }}
       />
       {suffix && (
-        <span className="pointer-events-none absolute inset-y-0 right-2.5 flex items-center text-xs text-neutral-400">
+        <span className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-xs text-neutral-400">
           {suffix}
         </span>
       )}
+      <span className="absolute inset-y-0 right-0 flex w-4 flex-col border-l border-neutral-200 dark:border-neutral-700">
+        {([1, -1] as const).map((dir) => (
+          <button
+            key={dir}
+            type="button"
+            tabIndex={-1}
+            aria-label={`${aria['aria-label'] ?? 'value'} ${dir === 1 ? 'increment' : 'decrement'}`}
+            className="flex-1 text-[7px] leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800"
+            onPointerDown={(e) => startRepeat(dir, e.shiftKey)}
+            onPointerUp={stopRepeat}
+            onPointerLeave={stopRepeat}
+          >
+            {dir === 1 ? '▲' : '▼'}
+          </button>
+        ))}
+      </span>
       {invalid && (
         <p role="alert" className="mt-0.5 text-right text-[11px] text-red-500">
           {invalidMessage}
@@ -116,7 +171,15 @@ export function DraftNumberInput({
 }
 
 export function MoneyInput(props: Omit<DraftNumberProps, 'format'>) {
-  return <DraftNumberInput format={groups} invalidMessage="enter an amount" {...props} />;
+  return (
+    <DraftNumberInput
+      format={groups}
+      invalidMessage="enter an amount"
+      step={1_000}
+      bigStep={10_000}
+      {...props}
+    />
+  );
 }
 
 /** Stored as a 0–1 decimal, edited as a percent. */
@@ -135,6 +198,7 @@ export function PercentInput({
       format={(v) => String(v)}
       suffix="%"
       invalidMessage="enter a percent"
+      step={0.1}
       {...rest}
     />
   );
@@ -147,6 +211,7 @@ export function AgeInput(props: Omit<DraftNumberProps, 'format'>) {
       min={0}
       max={120}
       invalidMessage="enter an age"
+      step={1}
       {...props}
     />
   );

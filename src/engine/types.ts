@@ -449,6 +449,8 @@ export interface DisplayState {
   panelWidth?: number;
   /** Basics vs Advanced inputs tier (M4.5 D.2). Optional, no migration. */
   inputsTier?: 'basics' | 'advanced';
+  /** Collapsed Basics section ids (M4.5 item 4). Optional; unset = all expanded. */
+  basicsCollapsed?: string[];
 }
 
 /**

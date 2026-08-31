@@ -11,7 +11,7 @@
  */
 
 import ReactECharts from 'echarts-for-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ateByAccount } from '../../engine/ate';
 import { toReal } from '../../engine/schedule';
 import type { Assumptions, DisplayState, MarkerEventKind, RunYear } from '../../engine/types';
@@ -58,6 +58,32 @@ export function GrowthChart({
   const startAge = years[0]?.age ?? 0;
   const lens = (v: number, age: number) =>
     display.real ? toReal(v, age - startAge, a.inflation) : v;
+
+  // M4.5 item 1: no per-frame canvas redraws while the panel divider drags —
+  // resize throttled to ~10/s with a trailing call that settles on release.
+  const chartRef = useRef<ReactECharts>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    let last = 0;
+    let trailing: ReturnType<typeof setTimeout>;
+    const doResize = () => chartRef.current?.getEchartsInstance().resize();
+    const ro = new ResizeObserver(() => {
+      const now = performance.now();
+      if (now - last > 100) {
+        last = now;
+        doResize();
+      }
+      clearTimeout(trailing);
+      trailing = setTimeout(doResize, 120);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      clearTimeout(trailing);
+    };
+  }, []);
 
   const option = useMemo(() => {
     const seriesDefs = display.byBuckets
@@ -214,5 +240,9 @@ export function GrowthChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [years, a, display, mode]);
 
-  return <ReactECharts option={option} style={{ height: 420 }} notMerge theme={undefined} />;
+  return (
+    <div ref={wrapRef}>
+      <ReactECharts ref={chartRef} option={option} style={{ height: 420 }} notMerge autoResize={false} theme={undefined} />
+    </div>
+  );
 }

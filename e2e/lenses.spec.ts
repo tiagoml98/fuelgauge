@@ -81,7 +81,7 @@ test('scenario menu: rename, duplicate with fresh id, delete guarded', async ({ 
   expect(new Set(s.growthScenarios.map((g) => g.id)).size).toBe(3);
   await page.getByRole('button', { name: 'rename' }).click();
   await page.getByLabel('Scenario name', { exact: true }).fill('My plan');
-  await page.getByRole('button', { name: 'save' }).click();
+  await page.getByRole('button', { name: 'save', exact: true }).click();
   s = await readState(page);
   expect(s.growthScenarios[2].name).toBe('My plan');
   await page.getByRole('button', { name: 'delete', exact: true }).click();

@@ -32,6 +32,10 @@ test('Stop at X normalizes rows — clips and drops, never appends (the B.2 bug 
   await commitInput(page, 'quick action age', '40');
   await page.getByRole('button', { name: 'apply' }).click();
   // spotcheck rows were {31–35: 20k} {38–∞: 40k} → clip to 39, keep 31–35
+  // user-visible outcome first: the rendered row inputs show the normalized rows
+  await expect(page.getByLabel('401k row 2 to age', { exact: true })).toHaveValue('39');
+  await expect(page.getByLabel('401k row 2 value', { exact: true })).toHaveValue('40,000');
+  await expect(page.getByLabel('401k row 1 to age', { exact: true })).toHaveValue('35');
   expect(await rows401k(page)).toEqual([
     { fromAge: 31, toAge: 35, value: 20_000 },
     { fromAge: 38, toAge: 39, value: 40_000 },

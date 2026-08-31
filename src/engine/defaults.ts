@@ -108,7 +108,9 @@ export const DEFAULT_COAST_TARGET_AGE = 65;
 export const DEFAULT_BARISTA_INCOME_TARGET = 0;
 export const DEFAULT_MATCH_VESTING_PCT = 1;
 export const DEFAULT_CURRENT_AGE = 30;
-export const DEFAULT_THEME = 'dark' as const;
+/** M4.5 D.1 decision: light is the default and the priority; dark is derived. */
+export const DEFAULT_THEME = 'light' as const;
+export const DEFAULT_PANEL_WIDTH = 400;
 
 // ---------------------------------------------------------------------------
 // Structure
@@ -273,6 +275,8 @@ export function defaultDisplayState(): DisplayState {
     byBuckets: true,
     theme: DEFAULT_THEME,
     yearlyTable: false,
+    panelWidth: DEFAULT_PANEL_WIDTH,
+    inputsTier: 'basics',
   };
 }
 

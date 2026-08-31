@@ -15,5 +15,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      # e2e job (Playwright, 100% e2e/COVERAGE.md manifest) lands with the
-      # M4.5 suite once the UI direction is chosen — see e2e/COVERAGE.md
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # the full e2e/COVERAGE.md manifest — every test fails on any console error/warning
+      - run: npm run e2e

@@ -58,7 +58,7 @@ export function BalanceTable({
             {rows.map((y) => {
               const ate = display.ate ? ateByAccount(y.accounts, a) : null;
               return (
-                <tr key={y.age} className="border-b border-neutral-100 dark:border-neutral-800">
+                <tr key={y.age} data-age={y.age} className="border-b border-neutral-100 dark:border-neutral-800">
                   <td className="py-1 text-left">{y.age}</td>
                   {ACCOUNT_ORDER.map((id) => (
                     <td key={id} className="py-1 pl-3">

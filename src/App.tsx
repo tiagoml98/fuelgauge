@@ -1,53 +1,60 @@
-/** App shell: tabs, theme, export/import, always-visible disclaimer (SPEC §13). */
+/**
+ * App shell, Ledger direction (M4.5 D.1): calm light-first chrome, tabs,
+ * scenario menu, export/import, theme toggle, always-visible disclaimer.
+ */
 
+import { Button } from '@/components/ui/button';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useRef, useState } from 'react';
 import { exportJson, importJsonFile } from './state/persist';
-import { StoreProvider, useStore } from './state/store';
-import { buttonCls } from './ui/components/fields';
+import { StoreProvider, useSelectedScenario, useStore } from './state/store';
 import { TabErrorBoundary } from './ui/components/TabErrorBoundary';
-import { GrowthTab } from './ui/tabs/GrowthTab';
+import { GrowthTabV2 } from './ui/v2/GrowthTabV2';
+import { ScenarioMenu } from './ui/v2/ScenarioMenu';
 
 function Shell() {
   const { state, dispatch } = useStore();
+  const scenario = useSelectedScenario();
   const fileInput = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const dark = state.display.theme === 'dark';
 
   return (
     <div className={dark ? 'dark' : ''}>
-      <div className="min-h-screen bg-[#f9f9f7] text-neutral-900 dark:bg-[#0d0d0d] dark:text-neutral-100">
-        <header className="flex flex-wrap items-center gap-3 border-b border-neutral-200 px-4 py-2 dark:border-neutral-800">
-          <h1 className="text-lg font-bold tracking-tight">FuelGauge</h1>
-          <nav className="flex gap-1">
-            <button type="button" className="rounded bg-neutral-900 px-3 py-1 text-sm font-medium text-white dark:bg-neutral-100 dark:text-neutral-900">
-              Growth
-            </button>
-            <button type="button" disabled className="cursor-not-allowed rounded px-3 py-1 text-sm text-neutral-400" title="M5">
+      <div className="min-h-screen bg-[#f6f5f2] font-sans text-neutral-900 dark:bg-[#0d0d0d] dark:text-neutral-100">
+        <header className="mx-auto flex max-w-[1560px] flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-1 pt-3">
+          <span className="text-[17px] font-bold tracking-tight">FuelGauge</span>
+          <nav className="flex gap-4 text-sm" aria-label="Tabs">
+            <span className="border-b-2 border-neutral-900 pb-0.5 font-medium dark:border-neutral-100">Growth</span>
+            <span className="cursor-not-allowed text-neutral-400" title="arrives in M5">
               Drawdown
-            </button>
-            <button type="button" disabled className="cursor-not-allowed rounded px-3 py-1 text-sm text-neutral-400" title="M6">
+            </span>
+            <span className="cursor-not-allowed text-neutral-400" title="arrives in M6">
               Compare
-            </button>
+            </span>
           </nav>
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              className={buttonCls}
+          <ScenarioMenu scenario={scenario} />
+          <div className="ml-auto flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 bg-white text-xs dark:bg-neutral-900"
               onClick={() => dispatch({ type: 'patchDisplay', patch: { theme: dark ? 'light' : 'dark' } })}
             >
               {dark ? 'light mode' : 'dark mode'}
-            </button>
-            <button type="button" className={buttonCls} onClick={() => exportJson(state)}>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 bg-white text-xs dark:bg-neutral-900" onClick={() => exportJson(state)}>
               export JSON
-            </button>
-            <button type="button" className={buttonCls} onClick={() => fileInput.current?.click()}>
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 bg-white text-xs dark:bg-neutral-900" onClick={() => fileInput.current?.click()}>
               import JSON
-            </button>
+            </Button>
             <input
               ref={fileInput}
               type="file"
               accept="application/json"
               className="hidden"
+              data-testid="import-input"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 e.target.value = '';
@@ -63,13 +70,13 @@ function Shell() {
           </div>
         </header>
 
-        <p className="border-b border-amber-200 bg-amber-50 px-4 py-1 text-center text-[11px] font-medium text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          Educational model built on simplifying assumptions — not tax or financial advice. Confirm
-          real decisions with a CPA.
+        <p className="mx-auto max-w-[1560px] px-5 pb-2 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+          Educational model on simplifying assumptions — not tax or financial advice. Confirm real
+          decisions with a CPA.
         </p>
 
         {importError && (
-          <p className="border-b border-red-200 bg-red-50 px-4 py-1 text-center text-xs text-red-800 dark:bg-red-950 dark:text-red-200">
+          <p role="alert" className="mx-auto max-w-[1560px] px-5 pb-2 text-xs text-red-700 dark:text-red-300">
             Import failed: {importError}{' '}
             <button type="button" className="underline" onClick={() => setImportError(null)}>
               dismiss
@@ -77,9 +84,9 @@ function Shell() {
           </p>
         )}
 
-        <div className="p-3">
+        <div className="mx-auto max-w-[1560px] px-5 pb-6">
           <TabErrorBoundary>
-            <GrowthTab />
+            <GrowthTabV2 />
           </TabErrorBoundary>
         </div>
       </div>
@@ -90,7 +97,9 @@ function Shell() {
 export default function App() {
   return (
     <StoreProvider>
-      <Shell />
+      <TooltipProvider>
+        <Shell />
+      </TooltipProvider>
     </StoreProvider>
   );
 }

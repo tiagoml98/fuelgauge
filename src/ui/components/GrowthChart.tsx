@@ -15,6 +15,7 @@ import { useMemo } from 'react';
 import { ateByAccount } from '../../engine/ate';
 import { toReal } from '../../engine/schedule';
 import type { Assumptions, DisplayState, MarkerEventKind, RunYear } from '../../engine/types';
+import { joinMarkerLabels, shortMarkerLabel } from '../v2/markers';
 import {
   ACCOUNT_COLORS,
   ACCOUNT_LABELS,
@@ -26,8 +27,13 @@ import {
 } from '../theme/colors';
 import { fmtMoney } from './fields';
 
-const compact = (v: number) =>
-  Math.abs(v) >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M` : `$${Math.round(v / 1000)}k`;
+const compact = (v: number) => {
+  const abs = Math.abs(v);
+  if (abs >= 1e12) return `$${(v / 1e12).toFixed(1)}T`;
+  if (abs >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  return `$${Math.round(v / 1000)}k`;
+};
 
 /** Regime changes draw at age − 0.5; one-time events at age. */
 const REGIME_KINDS: ReadonlySet<MarkerEventKind> = new Set([
@@ -83,19 +89,21 @@ export function GrowthChart({
       };
     });
 
+    // Short labels on the lines ("401k stop", "IPO"); full text in the crosshair readout
+    const singleFiler = a.filers.length === 1;
     const markAges = new Map<number, string[]>();
     for (const y of years) {
       for (const e of y.events) {
         if (e.kind === 'windfall' || REGIME_KINDS.has(e.kind)) {
           const x = REGIME_KINDS.has(e.kind) ? e.age - 0.5 : e.age;
-          markAges.set(x, [...(markAges.get(x) ?? []), e.label]);
+          markAges.set(x, [...(markAges.get(x) ?? []), shortMarkerLabel(e, singleFiler)]);
         }
       }
     }
     const markLineData = [...markAges.entries()].map(([x, labels]) => ({
       xAxis: x,
       label: {
-        formatter: labels.length > 1 ? `${labels[0]} +${labels.length - 1}` : labels[0],
+        formatter: joinMarkerLabels(labels),
         rotate: 90,
         position: 'insideEndTop' as const,
         color: chrome.inkMuted,
@@ -107,7 +115,7 @@ export function GrowthChart({
     return {
       backgroundColor: 'transparent',
       animation: false,
-      grid: { left: 64, right: 24, top: 36, bottom: 64 },
+      grid: { left: 64, right: 24, top: 36, bottom: 36 },
       legend: {
         top: 0,
         left: 0,
@@ -131,18 +139,31 @@ export function GrowthChart({
         splitLine: { lineStyle: { color: chrome.grid, width: 1 } },
         axisLabel: { color: chrome.inkMuted, fontSize: 10, formatter: compact },
       },
+      // TradingView-style behavior (M4.5 D.1): wheel zooms, drag pans, no slider
       dataZoom: [
-        { type: 'inside' },
         {
-          type: 'slider',
-          height: 16,
-          bottom: 10,
-          borderColor: chrome.grid,
-          textStyle: { color: chrome.inkMuted, fontSize: 9 },
+          type: 'inside',
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          preventDefaultMouseMove: true,
         },
       ],
       tooltip: {
         trigger: 'axis',
+        axisPointer: {
+          type: 'cross',
+          snap: true,
+          label: {
+            backgroundColor: chrome.surface,
+            borderColor: chrome.grid,
+            borderWidth: 1,
+            color: chrome.inkPrimary,
+            fontSize: 10,
+            formatter: (p: { axisDimension: string; value: number }) =>
+              p.axisDimension === 'x' ? `age ${Math.round(p.value)}` : compact(p.value),
+          },
+          crossStyle: { color: chrome.inkMuted, width: 1, type: 'dashed' as const },
+        },
         backgroundColor: chrome.surface,
         borderColor: chrome.grid,
         textStyle: { color: chrome.inkPrimary, fontSize: 11 },
@@ -162,11 +183,18 @@ export function GrowthChart({
             })
             .join('');
           const total = lens(display.ate ? y.totalAte : y.total, y.age);
+          const eventLines = y.events
+            .filter((e) => e.kind === 'windfall' || REGIME_KINDS.has(e.kind))
+            .map(
+              (e) =>
+                `<div style="color:${chrome.inkMuted};font-size:10px;margin-top:2px">◆ ${e.label}</div>`,
+            )
+            .join('');
           return `<div style="font-weight:600;margin-bottom:4px">Age ${y.age} · ${y.year} · ${
             display.real ? "today's $" : 'nominal'
           } · ${display.ate ? 'after-tax equivalent' : 'gross'}</div>${rows}
           <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid ${chrome.grid};margin-top:4px;padding-top:4px">
-            <span>Total</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtMoney(total)}</span></div>`;
+            <span>Total</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtMoney(total)}</span></div>${eventLines}`;
         },
       },
       series: seriesDefs.map((s, i) => ({

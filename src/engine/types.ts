@@ -445,6 +445,10 @@ export interface DisplayState {
   yearlyTable: boolean;
   selectedScenarioId?: string;
   selectedStrategyId?: string;
+  /** Left inputs panel width in px (M4.5 D.0 — resizable, persisted). Optional, no migration. */
+  panelWidth?: number;
+  /** Basics vs Advanced inputs tier (M4.5 D.2). Optional, no migration. */
+  inputsTier?: 'basics' | 'advanced';
 }
 
 /**

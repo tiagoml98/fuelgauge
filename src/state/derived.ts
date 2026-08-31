@@ -35,9 +35,15 @@ function namedSchedules(a: Assumptions, g: GrowthScenario): Array<[string, Sched
 }
 
 export function collectScheduleErrors(a: Assumptions, g: GrowthScenario): string[] {
-  return namedSchedules(a, g).flatMap(([name, rows]) =>
+  const errors = namedSchedules(a, g).flatMap(([name, rows]) =>
     validateRows(rows).map((e) => `${name}, row ${e.index + 1}: ${e.message}`),
   );
+  if (a.filers[0].currentAge >= a.horizonAge) {
+    errors.push(
+      `your age (${a.filers[0].currentAge}) is at or past the planning horizon (${a.horizonAge}) — raise the horizon under Advanced`,
+    );
+  }
+  return errors;
 }
 
 export interface SafeSimResult {

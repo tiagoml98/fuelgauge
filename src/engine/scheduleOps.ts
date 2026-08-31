@@ -5,7 +5,7 @@
  * remains in force for manual edits). Pure functions, no React.
  */
 
-import type { ScheduleRow } from '../engine/types';
+import type { ScheduleRow } from './types';
 
 /** "Stop at X": clip every row to end ≤ X−1; drop rows starting at or after X. */
 export function stopAt(rows: ScheduleRow[], stopAge: number): ScheduleRow[] {
@@ -28,6 +28,29 @@ export const lowerReturnFrom = reduceTo;
 export function untilAge(rows: ScheduleRow[], endAge: number): ScheduleRow[] {
   if (rows.length === 0) return rows;
   return rows.map((r, i) => (i === rows.length - 1 ? { ...r, toAge: endAge } : { ...r }));
+}
+
+/** The complement of stopAt: rows clipped to start at or after `fromAge` (M6, stress preset). */
+export function sliceFrom(rows: ScheduleRow[], fromAge: number): ScheduleRow[] {
+  return rows
+    .filter((r) => r.toAge === null || r.toAge >= fromAge)
+    .map((r) => (r.fromAge < fromAge ? { ...r, fromAge } : { ...r }));
+}
+
+/** Run-length encode per-age values back into normalized, non-overlapping rows (M6 presets). */
+export function rowsFromValues(values: number[], startAge: number): ScheduleRow[] {
+  const rows: ScheduleRow[] = [];
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v === 0) continue;
+    const last = rows[rows.length - 1];
+    if (last && last.value === v && last.toAge === startAge + i - 1) last.toAge = startAge + i;
+    else rows.push({ fromAge: startAge + i, toAge: startAge + i, value: v });
+  }
+  // open-end the final row when it runs to the end of the resolved window
+  const last = rows[rows.length - 1];
+  if (last && last.toAge === startAge + values.length - 1) last.toAge = null;
+  return rows;
 }
 
 /**

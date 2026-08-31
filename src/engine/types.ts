@@ -453,8 +453,12 @@ export interface DisplayState {
   inputsTier?: 'basics' | 'advanced';
   /** Collapsed Basics section ids (M4.5 item 4). Optional; unset = all expanded. */
   basicsCollapsed?: string[];
-  /** Active tab (M5). Optional; unset = growth. Compare arrives in M6. */
-  activeTab?: 'growth' | 'drawdown';
+  /** Active tab (M5/M6). Optional; unset = growth. */
+  activeTab?: 'growth' | 'drawdown' | 'compare';
+  /** Compare-grid cell selection (M6). Optional, no migration. */
+  compareSelection?: Array<{ scenarioId: string; strategyId: string }>;
+  /** Delta-table baseline cell (M6). Optional; unset = first selected. */
+  compareBaseline?: { scenarioId: string; strategyId: string };
 }
 
 /**

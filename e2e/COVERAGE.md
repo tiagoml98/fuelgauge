@@ -166,4 +166,27 @@ table/tooltip/bridge equality).
 | No-spending empty state (C.5) | DD:tab-switching |
 | Balance table need/withdrawn/gap columns (gap rows forced into the 5-yr view) | DD:locked · DD:swr-flat |
 
-**Manifest: 233/233 items covered (64 state fields + 71 VARIABLES rows + 80 Growth controls + 18 Drawdown controls).**
+## 5. Compare-tab controls (M6 re-audit) — 14/14
+
+`CP` = compare.spec. All under the console guard.
+
+| Control | Test |
+|---|---|
+| Compare tab nav + activeTab='compare' persistence | CP (loads via state) · DD:tab-switching pattern |
+| Grid cells (7 metrics each, lens rule, no-spending state, error state) | CP:grid-two-cells (both lenses, engine equality) |
+| Cell selection toggle + selection ring/color dot | CP:hand-case · CP:baseline-deltas |
+| Lens toggles on the grid | CP:grid-two-cells |
+| Overlay chart + crossover markers + data-crossovers artifact | CP:hand-case (66, machine-checked) · CP:retire-pair (correctly none) |
+| Baseline picker | CP:baseline-deltas |
+| Delta table (signed, lens rule) | CP:hand-case · CP:baseline-deltas |
+| Preset: Traditional vs Roth equal take-home + §8 driver note | CP:equal-take-home + unit presets tests |
+| Preset: stop contributing at X (age input) | CP:normalized-presets |
+| Preset: reduce 401k to Y at Z (two inputs) | CP:normalized-presets |
+| Preset: retire at X vs Y (two inputs) | CP:retire-pair |
+| Preset: stress first 3 drawdown years | CP:normalized-presets (exact rows) |
+| Ladder-bridge P2 note (not faked) | CP:normalized-presets |
+| Empty state (< 2 selected) + ?mockup routes removed | CP:baseline-deltas · rendered by default state |
+
+Display fields `compareSelection` / `compareBaseline`: CP:hand-case + CP:retire-pair (set, read back).
+
+**Manifest: 250/250 items covered (66 state fields + 71 VARIABLES rows + 80 Growth + 18 Drawdown + 14 Compare + 1 route-removal check).**

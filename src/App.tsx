@@ -9,6 +9,7 @@ import { useRef, useState } from 'react';
 import { exportJson, importJsonFile } from './state/persist';
 import { StoreProvider, useSelectedScenario, useStore } from './state/store';
 import { TabErrorBoundary } from './ui/components/TabErrorBoundary';
+import { CompareTab } from './ui/v2/CompareTab';
 import { DrawdownTab } from './ui/v2/DrawdownTab';
 import { GrowthTabV2 } from './ui/v2/GrowthTabV2';
 import { ScenarioMenu } from './ui/v2/ScenarioMenu';
@@ -28,7 +29,7 @@ function Shell() {
         <header className="mx-auto flex w-full max-w-[1560px] shrink-0 flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-1 pt-3">
           <span className="text-[17px] font-bold tracking-tight">FuelGauge</span>
           <nav className="flex gap-4 text-sm" aria-label="Tabs">
-            {(['growth', 'drawdown'] as const).map((tab) => (
+            {(['growth', 'drawdown', 'compare'] as const).map((tab) => (
               <button
                 key={tab}
                 type="button"
@@ -39,12 +40,9 @@ function Shell() {
                     : 'pb-0.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'
                 }
               >
-                {tab === 'growth' ? 'Growth' : 'Drawdown'}
+                {tab === 'growth' ? 'Growth' : tab === 'drawdown' ? 'Drawdown' : 'Compare'}
               </button>
             ))}
-            <span className="cursor-not-allowed text-neutral-400" title="arrives in M6">
-              Compare
-            </span>
           </nav>
           <ScenarioMenu scenario={scenario} />
           <div className="ml-auto flex items-center gap-1.5">
@@ -99,7 +97,13 @@ function Shell() {
 
         <div className="mx-auto min-h-0 w-full max-w-[1560px] flex-1 px-5 pb-4">
           <TabErrorBoundary>
-            {(state.display.activeTab ?? 'growth') === 'drawdown' ? <DrawdownTab /> : <GrowthTabV2 />}
+            {(state.display.activeTab ?? 'growth') === 'drawdown' ? (
+              <DrawdownTab />
+            ) : (state.display.activeTab ?? 'growth') === 'compare' ? (
+              <CompareTab />
+            ) : (
+              <GrowthTabV2 />
+            )}
           </TabErrorBoundary>
         </div>
       </div>

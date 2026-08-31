@@ -16,7 +16,7 @@ import {
   stopAt,
   untilAge,
   validateRows,
-} from '../../state/scheduleOps';
+} from '../../engine/scheduleOps';
 import { AgeInput, DraftNumberInput, fmtMoney0, MoneyInput, PercentInput } from './inputs';
 
 function Sparkline({ rows, startAge, endAge }: { rows: ScheduleRow[]; startAge: number; endAge: number }) {

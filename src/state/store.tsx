@@ -44,6 +44,8 @@ export type Action =
   | { type: 'deleteStrategy'; id: string }
   | { type: 'setFilerCount'; count: 1 | 2 }
   | { type: 'patchDisplay'; patch: Partial<DisplayState> }
+  /** M6 presets: add fully-formed objects (fresh ids assigned here) and select them for compare. */
+  | { type: 'addCompareRuns'; scenarios: GrowthScenario[]; strategies: WithdrawalStrategy[] }
   | { type: 'replaceState'; state: PersistedState };
 
 const newId = (): string =>
@@ -167,6 +169,33 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
     }
     case 'patchDisplay':
       return { ...state, display: { ...state.display, ...action.patch } };
+    case 'addCompareRuns': {
+      const scenarios = action.scenarios.map((g) => ({ ...g, id: newId() }));
+      const strategies = action.strategies.map((w) => ({ ...w, id: newId() }));
+      const allScenarios = [...state.growthScenarios, ...scenarios];
+      const allStrategies = [...state.strategies, ...strategies];
+      // selection: every spawned scenario × the reference strategy (and vice versa)
+      const selScenarios = scenarios.length > 0 ? scenarios : [
+        allScenarios.find((g) => g.id === state.display.selectedScenarioId) ?? allScenarios[0],
+      ];
+      const selStrategies = strategies.length > 0 ? strategies : [
+        allStrategies.find((w) => w.id === state.display.selectedStrategyId) ?? allStrategies[0],
+      ];
+      const selection = selScenarios.flatMap((g) =>
+        selStrategies.map((w) => ({ scenarioId: g.id, strategyId: w.id })),
+      );
+      return {
+        ...state,
+        growthScenarios: allScenarios,
+        strategies: allStrategies,
+        display: {
+          ...state.display,
+          compareSelection: selection,
+          compareBaseline: selection[0],
+          activeTab: 'compare',
+        },
+      };
+    }
     case 'replaceState':
       return action.state;
   }

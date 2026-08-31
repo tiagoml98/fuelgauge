@@ -69,6 +69,16 @@ export const ACCOUNT_COLORS: Record<ThemeMode, Record<AccountId, string>> = {
   },
 };
 
+/**
+ * Compare-overlay run colors: the full 8-slot categorical theme (validated
+ * reference palette), fixed order, never cycled — a 9th run folds into the
+ * delta table only (dataviz non-negotiable).
+ */
+export const RUN_COLORS: Record<ThemeMode, string[]> = {
+  light: ['#2a78d6', '#1baf7a', '#eda100', '#008300', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834'],
+  dark: ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'],
+};
+
 /** Chart chrome & ink (reference palette instance). */
 export const CHROME: Record<
   ThemeMode,

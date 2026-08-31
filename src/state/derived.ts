@@ -12,6 +12,7 @@ import {
   baristaFireAge,
   baristaFireAgeFromAssumptions,
   coastFireAge,
+  earliestNoGapStartAge,
   fireNumber,
   firstAgeAtValue,
   fullFireAge,
@@ -27,7 +28,7 @@ import type {
   ScheduleRow,
   WithdrawalStrategy,
 } from '../engine/types';
-import { validateRows } from './scheduleOps';
+import { validateRows } from '../engine/scheduleOps';
 
 function namedSchedules(a: Assumptions, g: GrowthScenario): Array<[string, ScheduleRow[]]> {
   return [
@@ -176,6 +177,84 @@ export function useDrawdownMetrics(run: RunResult | null, a: Assumptions, w: Wit
       marginOverTarget: margin,
     };
   }, [run, a, w]);
+}
+
+// ---------------------------------------------------------------------------
+// Compare grid (M6)
+// ---------------------------------------------------------------------------
+
+export interface CompareCell {
+  scenarioId: string;
+  strategyId: string;
+  run: RunResult | null;
+  errors: string[];
+  /** Gate #E1: lazy relative to inputs — cached on (a, g, w) identity. */
+  earliestNoGapStart: number | null;
+}
+
+const gridCache = new WeakMap<Assumptions, Map<string, CompareCell>>();
+
+/** Per-cell runs, memoized on object identities so edits recompute only what changed. */
+export function useCompareGrid(
+  a: Assumptions,
+  scenarios: GrowthScenario[],
+  strategies: WithdrawalStrategy[],
+): CompareCell[][] {
+  return useMemo(() => {
+    let cache = gridCache.get(a);
+    if (!cache) {
+      cache = new Map();
+      gridCache.set(a, cache);
+    }
+    return scenarios.map((g) =>
+      strategies.map((w) => {
+        const key = `${g.id}:${w.id}`;
+        const cached = cache!.get(key);
+        if (cached && cached.run && cached.scenarioId === g.id) return cached;
+        const { run, errors } = safeSimulateRun(a, g, w);
+        let earliest: number | null = null;
+        if (run) {
+          try {
+            earliest = earliestNoGapStartAge(a, g, w);
+          } catch {
+            earliest = null;
+          }
+        }
+        const cell: CompareCell = { scenarioId: g.id, strategyId: w.id, run, errors, earliestNoGapStart: earliest };
+        cache!.set(key, cell);
+        return cell;
+      }),
+    );
+  }, [a, scenarios, strategies]);
+}
+
+/**
+ * First age at which run B's ATE total crosses run A's (sign change of the
+ * difference under the lens); null when one never overtakes the other.
+ */
+export function firstCrossover(
+  runA: RunResult,
+  runB: RunResult,
+  a: Assumptions,
+  real: boolean,
+): number | null {
+  const startAge = runA.years[0]?.age ?? 0;
+  const value = (run: RunResult, i: number) => {
+    const y = run.years[i];
+    if (!y) return null;
+    return real ? toReal(y.totalAte, y.age - startAge, a.inflation) : y.totalAte;
+  };
+  let prevSign = 0;
+  for (let i = 0; i < Math.min(runA.years.length, runB.years.length); i++) {
+    const va = value(runA, i);
+    const vb = value(runB, i);
+    if (va === null || vb === null) break;
+    const diff = vb - va;
+    const sign = Math.abs(diff) < 0.005 ? 0 : Math.sign(diff);
+    if (prevSign !== 0 && sign !== 0 && sign !== prevSign) return runA.years[i].age;
+    if (sign !== 0) prevSign = sign;
+  }
+  return null;
 }
 
 export function useGrowthMetrics(

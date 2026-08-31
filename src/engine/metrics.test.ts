@@ -9,6 +9,7 @@ import {
   fireNumber,
   firstAgeAtValue,
   fullFireAge,
+  strategyHasSpending,
 } from './metrics';
 import { simulateRun } from './run';
 import type { Assumptions, GrowthScenario, ScheduleRow, WithdrawalStrategy } from './types';
@@ -19,6 +20,18 @@ describe('fireNumber', () => {
   it('is spend ÷ SWR', () => {
     expect(fireNumber(40_000, 0.04)).toBe(1_000_000);
     expect(fireNumber(0, 0.04)).toBe(0);
+  });
+});
+
+describe('strategyHasSpending (M4.5 C.5)', () => {
+  it('is false for empty or zero-value spending, true with real rows', () => {
+    const w = defaultWithdrawalStrategy(defaultAssumptions(2026));
+    expect(strategyHasSpending(w)).toBe(false);
+    expect(strategyHasSpending({ ...w, spending: [{ fromAge: 0, toAge: null, value: 0 }] })).toBe(false);
+    expect(strategyHasSpending({ ...w, spending: [{ fromAge: 0, toAge: null, value: 40_000 }] })).toBe(true);
+    expect(
+      strategyHasSpending({ ...w, oneTimeExpenses: [{ age: 50, amount: 10_000, label: 'x' }] }),
+    ).toBe(true);
   });
 });
 

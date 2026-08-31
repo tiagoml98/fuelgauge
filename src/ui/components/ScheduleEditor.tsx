@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { resolveSchedule } from '../../engine/schedule';
 import type { ScheduleRow } from '../../engine/types';
+import { quickActionDefaultAge, reduceTo, stopAt, untilAge, validateRows } from '../../state/scheduleOps';
 import { buttonCls } from './fields';
 
 const cell =
@@ -55,17 +56,23 @@ export function ScheduleEditor({
   unit?: string;
 }) {
   const [quick, setQuick] = useState<'stop' | 'reduce' | 'until' | null>(null);
-  const [qAge, setQAge] = useState(endAge);
+  const [qAge, setQAge] = useState(() => quickActionDefaultAge(rows, startAge + 1));
   const [qAmount, setQAmount] = useState(0);
+  const rowErrors = validateRows(rows);
 
   const patchRow = (i: number, patch: Partial<ScheduleRow>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
+  // Quick actions NORMALIZE rows — clip/drop, never append overrides (M4.5 C.1)
   const applyQuick = () => {
-    if (quick === 'stop') onChange([...rows, { fromAge: qAge, toAge: null, value: 0 }]);
-    if (quick === 'reduce') onChange([...rows, { fromAge: qAge, toAge: null, value: qAmount }]);
-    if (quick === 'until') onChange([...rows, { fromAge: qAge + 1, toAge: null, value: 0 }]);
+    if (quick === 'stop') onChange(stopAt(rows, qAge));
+    if (quick === 'reduce') onChange(reduceTo(rows, qAmount, qAge));
+    if (quick === 'until') onChange(untilAge(rows, qAge));
     setQuick(null);
+  };
+  const openQuick = (q: 'stop' | 'reduce' | 'until') => {
+    setQAge(quickActionDefaultAge(rows, startAge + 1));
+    setQuick(quick === q ? null : q);
   };
 
   return (
@@ -128,6 +135,11 @@ export function ScheduleEditor({
                     ×
                   </button>
                 </td>
+                {rowErrors.some((e) => e.index === i) && (
+                  <td className="pl-1 text-[10px] text-red-500">
+                    {rowErrors.find((e) => e.index === i)?.message}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -142,12 +154,17 @@ export function ScheduleEditor({
           + row
         </button>
         {(['stop', 'reduce', 'until'] as const).map((q) => (
-          <button key={q} type="button" className={buttonCls} onClick={() => setQuick(quick === q ? null : q)}>
-            {q === 'stop' ? 'Stop at…' : q === 'reduce' ? 'Reduce…' : 'Until age…'}
+          <button key={q} type="button" className={buttonCls} onClick={() => openQuick(q)}>
+            {q === 'stop' ? 'Stop at…' : q === 'reduce' ? (unit.includes('%') ? 'Lower to…' : 'Reduce…') : 'Until age…'}
           </button>
         ))}
         {quick && (
-          <span className="flex items-center gap-1 text-xs">
+          <span
+            className="flex items-center gap-1 text-xs"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') applyQuick();
+            }}
+          >
             age
             <input type="number" className={cell} value={qAge} onChange={(e) => setQAge(e.target.valueAsNumber || 0)} />
             {quick === 'reduce' && (

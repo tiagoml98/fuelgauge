@@ -57,17 +57,33 @@ describe('returns, fees, and the schedule boundary (SPEC §12)', () => {
     expect(rowAt(years, 33).accounts.trad401k.balance).toBeCloseTo(10_000 * 1.065 ** 3, 8);
   });
 
-  it('7% to 50 then 5%: the age-51 year is the first at 5%', () => {
-    const a = defaultAssumptions(2026); // default return schedule
-    a.indexWithInflation = false;
-    a.fees = 0;
-    a.filers = [{ currentAge: 48 }];
-    a.horizonAge = 53;
-    a.balances.perFiler[0].trad401k = 1_000;
+  it('7% to 50 then 5%: the age-51 year is the first at 5%, with a returnChange marker', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = [
+        { fromAge: 0, toAge: 50, value: 0.07 },
+        { fromAge: 51, toAge: null, value: 0.05 },
+      ];
+      x.filers = [{ currentAge: 48 }];
+      x.horizonAge = 53;
+      x.balances.perFiler[0].trad401k = 1_000;
+    });
     const years = simulateAccumulation(a, makeG());
     expect(rowAt(years, 50).accounts.trad401k.balance).toBeCloseTo(1_000 * 1.07 ** 2, 8);
     expect(rowAt(years, 51).accounts.trad401k.balance).toBeCloseTo(1_000 * 1.07 ** 2 * 1.05, 8);
     expect(rowAt(years, 52).accounts.trad401k.balance).toBeCloseTo(1_000 * 1.07 ** 2 * 1.05 ** 2, 8);
+    const marks = rowAt(years, 51).events.filter((e) => e.kind === 'returnChange');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].label).toBe('return 7% → 5%');
+    expect(eventsOf(years).filter((e) => e.kind === 'returnChange')).toHaveLength(1);
+  });
+
+  it('the flat default return schedule emits no returnChange markers', () => {
+    const a = makeA((x) => {
+      x.returnSchedule = flat(0.07);
+      x.balances.perFiler[0].trad401k = 1_000;
+    });
+    const years = simulateAccumulation(a, makeG());
+    expect(eventsOf(years).some((e) => e.kind === 'returnChange')).toBe(false);
   });
 
   it('fees never touch cash; cash interest is taxed at marginal-now (gate #8)', () => {

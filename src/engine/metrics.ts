@@ -21,6 +21,14 @@ export function fireNumber(annualSpendReal: number, swr: number): number {
 }
 
 /**
+ * M4.5 C.5: a strategy with no spending rows must show "no spending entered",
+ * never "bridge funded: yes" with $0 lifetime spending.
+ */
+export function strategyHasSpending(w: WithdrawalStrategy): boolean {
+  return w.spending.some((r) => r.value > 0) || w.oneTimeExpenses.some((r) => r.amount > 0);
+}
+
+/**
  * First age at which the REAL GROSS total reaches the target ($1M age —
  * M3 decision #7); null if never.
  */

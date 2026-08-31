@@ -15,7 +15,7 @@ export function GrowthTab() {
   const { state, dispatch } = useStore();
   const a = state.assumptions;
   const scenario = useSelectedScenario();
-  const years = useGrowthYears(a, scenario);
+  const { years, errors } = useGrowthYears(a, scenario);
   const metrics = useGrowthMetrics(a, scenario, years);
   const d = state.display;
   const toggle = (key: 'real' | 'ate' | 'byBuckets') =>
@@ -35,6 +35,11 @@ export function GrowthTab() {
       </aside>
 
       <main className="space-y-3">
+        {errors.length > 0 && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            Fix inputs — showing the last valid result. {errors.join(' · ')}
+          </p>
+        )}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <ScenarioBar scenario={scenario} />
           <div className="flex gap-1">

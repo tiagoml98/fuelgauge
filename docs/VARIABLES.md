@@ -54,7 +54,7 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 |---|---|---|---|---|---|---|
 | Inflation | Assumptions | %/yr | n/a (rate) | 3% | 0–15% | schedule indexing (M1), toReal (M1), real-return math (M2) |
 | Index with inflation | Assumptions | bool | on | — | schedule (M1), limits (M2) |
-| Return schedule by age | Assumptions | rows {from age, to age, %/yr} | nominal rate | 7% until 50, 5% after | −20%–+20% per row | accumulate (M2), drawdown growth (M3) |
+| Return schedule by age | Assumptions | rows {from age, to age, %/yr} | nominal rate | **7% flat** (M4.5 C.2 — SPEC's 7%-then-5%-at-50 produced an unexplained kink on first use; age steps come from the "lower return to X% from age Y" quick action, which the Stress preset also uses) | −20%–+20% per row | accumulate (M2), drawdown growth (M3); changes emit a returnChange marker (M4.5 C.3) |
 | Per-account return override (×7, optional) | Assumptions | rows, same shape | nominal rate | unset (use global); **Cash: 4%** (SPEC §2) | same | accumulate (M2) |
 | Fees / expense ratio | Assumptions | %/yr | n/a (rate) | **0.1%** (gate #15) | 0–2% | accumulate (M2): subtracted from return on **invested accounts only — never cash** (gate #8) |
 | Dividend yield (taxable drag) | Assumptions | %/yr | n/a (rate) | 2% | 0–10% | accumulate: drag on invested taxable only (M2) |

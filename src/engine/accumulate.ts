@@ -100,6 +100,8 @@ export interface SimContext {
   /** Number of simulated years (horizon − startAge). */
   n: number;
   returns: Record<AccountId, number[]>;
+  /** Gross invested-return stream (before fees) for the returnChange marker. */
+  investedGrossReturns: number[];
   perFiler: ResolvedFilerStreams[];
   hsaC: number[];
   hsaRaw: number[];
@@ -158,6 +160,13 @@ export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext 
     returns[id] = gross.map((r) => (INVESTED.has(id) ? r - a.fees : r)); // fees never touch cash (gate #8)
   }
 
+  // The invested-account schedule (M2 gate #6 precedence, sans per-account
+  // overrides), gross of fees — drives the returnChange marker (M4.5 C.3).
+  const investedGrossReturns = resolveSchedule(
+    g.returnScheduleOverride ?? a.returnSchedule,
+    rawOpts,
+  );
+
   const perFiler = a.filers.map((_, f) => {
     const inputs: FilerGrowthInputs = g.perFiler[f];
     return {
@@ -208,6 +217,7 @@ export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext 
     startAge,
     n,
     returns,
+    investedGrossReturns,
     perFiler,
     hsaC: resolveSchedule(g.hsaContrib, idxOpts),
     hsaRaw: resolveSchedule(g.hsaContrib, rawOpts),
@@ -493,6 +503,24 @@ export function applyWindfalls(ctx: SimContext, t: number, events: MarkerEvent[]
   }
 }
 
+const pct = (v: number): string => {
+  const p = Math.round(v * 1000) / 10; // one decimal, no float dust (0.07 → 7, not 7.000…01)
+  return `${p}%`;
+};
+
+/** M4.5 C.3: marker whenever the effective invested return changes between years. */
+export function emitReturnChangeMarker(ctx: SimContext, t: number, events: MarkerEvent[]): void {
+  const prev = ctx.investedGrossReturns[t - 1];
+  const now = ctx.investedGrossReturns[t];
+  if (t > 1 && now !== prev) {
+    events.push({
+      kind: 'returnChange',
+      age: ctx.startAge + t,
+      label: `return ${pct(prev)} → ${pct(now)}`,
+    });
+  }
+}
+
 /** Contribution stop/reduce/resume/increase/start markers (SPEC §3, M2 gate #2). */
 export function emitStreamMarkers(ctx: SimContext, t: number, events: MarkerEvent[]): void {
   const age = ctx.startAge + t;
@@ -601,6 +629,7 @@ export function simulateAccumulation(
     if (contributing) {
       emitStreamMarkers(ctx, t, events);
     }
+    emitReturnChangeMarker(ctx, t, events);
     ctx.cumulativeTax += taxPaid;
     years.push(takeSnapshot(ctx, age, a.currentYear + t, taxPaid, events));
   }

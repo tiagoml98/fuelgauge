@@ -200,4 +200,5 @@ WithdrawalStrategy ┘                  └→ summarizeRun → compare grid (ru
 - **Each account's effective return schedule must be visible** — precedence is: scenario override (all invested accounts) > per-account override > global schedule; cash always uses its own return (M2 gate #6).
 - **Ids** for scenarios/strategies are generated and uniqued by the UI; engine factories default to `'base'`.
 - **Second filer added** ⇒ suggest flipping `hsaCoverage` to family.
-- **Schedule rows are never re-sorted in storage** — order is semantic (later rows win); sort in the editor for display only, and append override rows for quick actions.
+- **Schedule rows are never re-sorted in storage** — order is semantic (later rows win); sort in the editor for display only. Quick actions NORMALIZE rows (clip/drop via `src/state/scheduleOps.ts`) — they never append override rows (M4.5 C.1); the overlap rule remains for manual edits.
+- **Marker placement (M4.5 B.4):** engine events are "from age N"; the chart x-axis is numeric and renders REGIME changes (contribution changes, return changes, drawdown start, access ages, rollovers) at **N − 0.5** so the line sits on the visible bend; one-time events (windfalls, one-time expenses) render at N.

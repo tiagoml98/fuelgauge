@@ -40,11 +40,12 @@ export const DEFAULT_CASH_RETURN = 0.04;
 export const DEFAULT_DIVIDEND_YIELD = 0.02;
 export const DEFAULT_DIVIDEND_TAX_RATE = 0.15;
 
-/** SPEC §1: 7% until 50, 5% after (filer-1 age domain; decimal rates). */
-export const DEFAULT_RETURN_SCHEDULE: ScheduleRow[] = [
-  { fromAge: 0, toAge: 50, value: 0.07 },
-  { fromAge: 51, toAge: null, value: 0.05 },
-];
+/**
+ * M4.5 C.2: one flat row — the SPEC §1 7%-then-5%-at-50 default produced an
+ * unexplained kink on first use. Age-based steps come from the "lower return
+ * to X% from age Y" quick action (and the Stress preset, M6) instead.
+ */
+export const DEFAULT_RETURN_SCHEDULE: ScheduleRow[] = [{ fromAge: 0, toAge: null, value: 0.07 }];
 
 // ---------------------------------------------------------------------------
 // Taxes (simple mode)

@@ -84,11 +84,10 @@ describe('defaultAssumptions', () => {
     expect(a.filingStatus).toBe('single');
   });
 
-  it('default return schedule is 7% until 50, then 5%', () => {
+  it('default return schedule is one flat 7% row (M4.5 C.2 — no unexplained kink)', () => {
     expect(a.returnSchedule).toEqual(DEFAULT_RETURN_SCHEDULE);
     expect(a.returnSchedule).not.toBe(DEFAULT_RETURN_SCHEDULE); // cloned, not shared
-    expect(a.returnSchedule[0]).toEqual({ fromAge: 0, toAge: 50, value: 0.07 });
-    expect(a.returnSchedule[1]).toEqual({ fromAge: 51, toAge: null, value: 0.05 });
+    expect(a.returnSchedule).toEqual([{ fromAge: 0, toAge: null, value: 0.07 }]);
   });
 
   it('cash carries its own 4% return override and every account is included', () => {

@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { simulateAccumulation } from '../src/engine/accumulate';
 import { ateByAccount } from '../src/engine/ate';
 import { ALL_ACCOUNTS } from '../src/engine/defaults';
+import { strategyHasSpending } from '../src/engine/metrics';
 import { migratePersistedState } from '../src/engine/persist';
 import { simulateRun } from '../src/engine/run';
 import { timingExponent, toReal } from '../src/engine/schedule';
@@ -156,14 +157,21 @@ if (run && run.notes.length > 0) {
   console.log('\n=== RUN NOTES ===');
   for (const n of run.notes) console.log(`  ${n}`);
 }
-if (run) {
+if (run && strategy) {
   const s = run.summary;
-  console.log(
-    `\nSummary: drawdown at ${run.drawdownStartAge} · years retired ${s.yearsRetired} · ` +
-      `lifetime after-tax spending ${s.lifetimeAfterTaxSpending.toFixed(2)} · ` +
-      `terminal ATE ${s.terminalAte.toFixed(2)} · first gap ${s.firstGapAge ?? '—'} · ` +
-      `bridge funded ${s.bridgeFunded ? 'yes' : 'NO'} · cumulative tax ${s.cumulativeTax.toFixed(2)}`,
-  );
+  if (!strategyHasSpending(strategy)) {
+    console.log(
+      `\nSummary: drawdown at ${run.drawdownStartAge} · no spending entered — set a FIRE spending target or add spending rows · ` +
+        `terminal ATE ${s.terminalAte.toFixed(2)} · cumulative tax ${s.cumulativeTax.toFixed(2)}`,
+    );
+  } else {
+    console.log(
+      `\nSummary: drawdown at ${run.drawdownStartAge} · years retired ${s.yearsRetired} · ` +
+        `lifetime after-tax spending ${s.lifetimeAfterTaxSpending.toFixed(2)} · ` +
+        `terminal ATE ${s.terminalAte.toFixed(2)} · first gap ${s.firstGapAge ?? '—'} · ` +
+        `bridge funded ${s.bridgeFunded ? 'yes' : 'NO'} · cumulative tax ${s.cumulativeTax.toFixed(2)}`,
+    );
+  }
 }
 
 console.log(

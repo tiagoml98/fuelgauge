@@ -341,6 +341,7 @@ export interface BalanceSnapshot {
 export type MarkerEventKind =
   | 'windfall'
   | 'contributionChange'
+  | 'returnChange'
   | 'drawdownStart'
   | 'accessAge'
   | 'rollover'

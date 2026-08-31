@@ -15,6 +15,7 @@ import {
   applyWindfalls,
   contributeYear,
   createSimContext,
+  emitReturnChangeMarker,
   emitStreamMarkers,
   growYear,
   rothIraTotal,
@@ -260,6 +261,7 @@ export function simulateRun(
       taxPaid += growYear(ctx, t, 'drawdown');
       applyWindfalls(ctx, t, events);
     }
+    emitReturnChangeMarker(ctx, t, events);
 
     // Access-age markers: emitted once, the year each per-filer source opens
     for (let f = 0; f < ctx.filers.length; f++) {

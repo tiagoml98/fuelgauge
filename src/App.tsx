@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { exportJson, importJsonFile } from './state/persist';
 import { StoreProvider, useStore } from './state/store';
 import { buttonCls } from './ui/components/fields';
+import { TabErrorBoundary } from './ui/components/TabErrorBoundary';
 import { GrowthTab } from './ui/tabs/GrowthTab';
 
 function Shell() {
@@ -77,7 +78,9 @@ function Shell() {
         )}
 
         <div className="p-3">
-          <GrowthTab />
+          <TabErrorBoundary>
+            <GrowthTab />
+          </TabErrorBoundary>
         </div>
       </div>
     </div>

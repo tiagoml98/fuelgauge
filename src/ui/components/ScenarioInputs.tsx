@@ -35,6 +35,16 @@ export function ScenarioInputs({ a, g }: { a: Assumptions; g: GrowthScenario }) 
               step={1}
               onChange={(v) => patchFiler(f, { separationAgeOverride: v > 0 ? v : undefined })}
             />
+            {pf.separationAgeOverride !== undefined &&
+              pf.salary.some(
+                (r) =>
+                  r.value > 0 && (r.toAge === null || r.toAge > (pf.separationAgeOverride ?? 0)),
+              ) && (
+                <p className="rounded bg-amber-50 p-2 text-[11px] text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                  salary continues after separation — match and contributions after{' '}
+                  {pf.separationAgeOverride} still apply
+                </p>
+              )}
             <ScheduleEditor label="401k contributions (total, both sides)" rows={pf.contrib401k} onChange={(rows) => patchFiler(f, { contrib401k: rows })} startAge={ownStart} endAge={ownEnd} />
             <PercentField label="401k share to Roth" value={pf.split401kRothPct} step={5} onChange={(v) => patchFiler(f, { split401kRothPct: v })} />
             <ScheduleEditor label="IRA contributions (total, both sides)" rows={pf.contribIra} onChange={(rows) => patchFiler(f, { contribIra: rows })} startAge={ownStart} endAge={ownEnd} />

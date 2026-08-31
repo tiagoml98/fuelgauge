@@ -15,7 +15,7 @@ import { ateByAccount } from '../src/engine/ate';
 import { ALL_ACCOUNTS } from '../src/engine/defaults';
 import { migratePersistedState } from '../src/engine/persist';
 import { simulateRun } from '../src/engine/run';
-import { toReal } from '../src/engine/schedule';
+import { timingExponent, toReal } from '../src/engine/schedule';
 import type { RunYear } from '../src/engine/types';
 
 function fail(message: string): never {
@@ -115,9 +115,13 @@ function printSection(title: string, value: (y: RunYear, col: Col) => number | s
   }
 }
 
+// need/withdrawn are start-of-year flows — deflated with the start-of-year
+// exponent (M3 gate correction #1); balances/taxes use end-of-year.
 const realize = (fn: (y: RunYear, col: Col) => number | string) => (y: RunYear, col: Col) => {
   const v = fn(y, col);
-  return typeof v === 'number' && col !== 'gap' ? toReal(v, yearsFromNow(y), a.inflation) : v;
+  if (typeof v !== 'number' || col === 'gap') return v;
+  const timing = col === 'need' || col === 'wdrawn' ? ('startOfYear' as const) : undefined;
+  return toReal(v, timingExponent(yearsFromNow(y), timing), a.inflation);
 };
 
 printSection('NOMINAL ($)', nominalValue);

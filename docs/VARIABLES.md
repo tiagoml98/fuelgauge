@@ -99,6 +99,7 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 | Safe withdrawal rate | Assumptions | % | 4% (tooltip: ~30 years) | 1–10% | metrics: FIRE number (M3) |
 | FIRE spending target | Assumptions | $/yr, today's $ | $0 (metrics show "—") | ≥ 0 | Gate #13: Growth-tab metrics (M3/M4); default spending row of a new withdrawal strategy |
 | Coast FIRE target age | Assumptions | age (filer 1) | 65 | > current age, ≤ horizon | Gate #13: Growth-tab Coast FIRE metric; drawdown-start fallback default (§3). Growth-tab metrics labeled "vs target spend $X, target age Y" |
+| Barista income target | Assumptions | $/yr, today's $ | $0 (metric shows "—") — optional field, no migration | ≥ 0 | M3 gate #6: Growth-tab Barista FIRE metric = Full FIRE on (spending target − this). Drawdown-tab Barista uses the strategy's part-time rows |
 | In-plan conversion allowed | Assumptions | bool | off | — | ladder *(P2)* |
 | In-service withdrawal allowed | Assumptions | bool | off | — | mega-backdoor *(P2)* |
 | After-tax contributions allowed | Assumptions | bool | off | — | mega-backdoor *(P2)* |
@@ -112,7 +113,7 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 | Pre-tax access age — per filer per pre-tax account | Assumptions (auto-filled from the growth scenario) | age (own age) | 59½; Traditional 401k auto-fills to the **scenario's** separation age when separation ≥ 55 (rule of 55), shown editable. `computeAccessAges(assumptions, scenario)` | access (M3) |
 | Roth-earnings access | — | derived | 59½ **and** 5 years since Roth IRA first funding | access (M3) |
 | RMD start age — per filer | — | derived from birth year | 73 (born 1951–59), 75 (1960+) | rmd (M10) |
-| Integer-year treatment of 59½ | — | rule (confirmed at gate; operationalized M3) | a source is open in the first year whose **end-of-year age ≥ ⌈access age⌉** — 59½ → the year they turn 60; rule-of-55 age 56 → the year they turn 56. Conservative — never unlocks early | access (M3): `accessOpen` |
+| Integer-year treatment of 59½ | — | rule (confirmed at gate; operationalized M3) | a source is open in the first year whose **end-of-year age ≥ ⌈access age⌉** — 59½ → the year they turn 60; rule-of-55 age 56 → the year they turn 56. Within ±6 months of the true date (ASSUMPTIONS M7) | access (M3): `accessOpen` |
 
 ---
 
@@ -149,7 +150,7 @@ All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0
 | Name | Layer | Unit | Real/nominal | Default | Valid range | Consumed by |
 |---|---|---|---|---|---|---|
 | Strategy name + id | Withdrawal | text | n/a | "Base" / id `base` | non-empty; unique ids are the UI's responsibility (as in §2) | UI, compare grid, persistence |
-| Drawdown start age | Withdrawal | age (filer 1) | n/a | auto: **earliest filer separation age in the paired growth scenario; if the scenario has no salary rows (no separation derivable), the Coast FIRE target age** — reconciles gate #13 and #15 | > current age, ≤ horizon | run (M3): contributions cut here, withdrawals begin at start of this year; rollover timing per gate #6 |
+| Drawdown start age | Withdrawal | age (filer 1) | n/a | auto: **earliest filer separation age + 1 in the paired growth scenario (M3 gate #2 — the separation year keeps its salary and end-of-year contributions); if the scenario has no salary rows, the Coast FIRE target age** | > current age, ≤ horizon | run (M3): contributions cut here, withdrawals begin at start of this year; rollover timing per gate #6 |
 | Spending schedule | Withdrawal | schedule $/yr | real (today's $) | one row: FIRE spending target from drawdown start to horizon (gate #13) | ≥ 0 | drawdown need (M3), FIRE number (M3) |
 | One-time expense rows | Withdrawal | rows {age, amount, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need (M3) |
 | Retirement income rows | Withdrawal | rows {type: part-time \| pension \| social-security, from age, to age, $/yr, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need offset (M3). **Simple mode taxes them (gate #9): part-time and pension at the effective rate, Social Security at 85% × effective.** Bracket mode (M7): brackets, SS 85% taxable |
@@ -222,3 +223,12 @@ Confirmed as documented: return-age convention (the year ending at age N uses th
 4. **`Windfall.filer`** (optional, default filer 1) picks the owner for per-filer targets.
 5. **Roth-destination match is contribution basis** (taxed as income when made).
 6. **Return precedence**: scenario override beats per-account overrides for all invested accounts; cash always uses its own return.
+
+### 7.3 M3 gate decisions (approved 2026-08-30)
+
+Approved as documented: access rounding via end-of-year age ≥ ⌈access age⌉ (bias reworded to "±6 months of the true date," ASSUMPTIONS M7); surplus retirement income → cash (M23); windfalls land during drawdown (M24); preTax draw order filer 1 → filer 2, trad 401k → trad IRA; HSA medical = accessible at face but never auto-drawn, non-medical opens at 65; trad-401k rollover at max(drawdown start, age-60 year); $1M milestone real gross, FIRE milestones real ATE; Drawdown-tab Barista FIRE = fireNumber on (spend − part-time income at start); example file isolates cases via order restriction. Amended:
+
+1. **Start-of-year flows index one year earlier** (bug fix): spending, one-time expenses, income rows, and ladder rows (P2) are priced at their year's START — `timing: 'startOfYear'` in the resolver, exponent (age − currentAge − 1); real display deflates them with the same exponent. Contributions and windfalls stay end-of-year. This makes the 4% rule literal: year-one draw = 4% of the starting balance (Trinity/Bengen, ASSUMPTIONS M25); SPEC §12's drawdown-flat test now pins the closed form to the cent.
+2. **Auto drawdown start = earliest separation age + 1** — the separation year keeps its salary and end-of-year contributions (supersedes the M3 report's decision #9).
+3. **Roth clock at rollover starts only if no Roth IRA was already funded** — an existing first-funded year governs (confirmed in code, now tested).
+4. **`baristaIncomeTarget`** added to Assumptions (optional, default $0 → "—") for the Growth-tab Barista metric (§1.6).

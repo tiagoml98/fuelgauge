@@ -3,6 +3,7 @@ import { simulateAccumulation } from './accumulate';
 import { defaultAssumptions, defaultGrowthScenario, defaultWithdrawalStrategy } from './defaults';
 import {
   analyzeBridge,
+  baristaFireAgeFromAssumptions,
   coastFireAge,
   earliestNoGapStartAge,
   fireNumber,
@@ -62,6 +63,21 @@ describe('coastFireAge — hand-computed case (SPEC §12)', () => {
   it('fullFireAge uses ATE (cash is face here, so same crossing)', () => {
     const years = simulateAccumulation(a, g);
     expect(fullFireAge(years, a, 40_000)).toBe(34);
+  });
+
+  it('Growth-tab Barista FIRE nets the barista income target (M3 gate #6)', () => {
+    const years = simulateAccumulation(a, g);
+    // 20k income → number = 20k/4% = 500k → already there at 30
+    expect(baristaFireAgeFromAssumptions(years, { ...a, baristaIncomeTarget: 20_000 })).toBe(30);
+    // unset/zero income or spending target → "—"
+    expect(baristaFireAgeFromAssumptions(years, a)).toBeNull();
+    expect(
+      baristaFireAgeFromAssumptions(years, {
+        ...a,
+        fireSpendingTarget: 0,
+        baristaIncomeTarget: 20_000,
+      }),
+    ).toBeNull();
   });
 });
 

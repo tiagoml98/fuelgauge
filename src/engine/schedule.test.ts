@@ -99,6 +99,15 @@ describe('resolveSchedule', () => {
     expect(at(out, 30, 55)).toBeCloseTo(1000 * 1.03 ** 25, 8);
   });
 
+  it('startOfYear timing indexes to the year-start price level (M3 correction #1)', () => {
+    const rows: ScheduleRow[] = [{ fromAge: 30, toAge: null, value: 1000 }];
+    const out = resolveSchedule(rows, opts({ indexed: true, timing: 'startOfYear' }));
+    expect(at(out, 30, 31)).toBe(1000); // first drawdown year draws at today's level
+    expect(at(out, 30, 40)).toBeCloseTo(1000 * 1.03 ** 9, 8); // one year less than endOfYear
+    const oneTime = resolveOneTime([{ age: 40, amount: 10_000, label: 'x' }], opts({ indexed: true, timing: 'startOfYear' }));
+    expect(at(oneTime, 30, 40)).toBeCloseTo(10_000 * 1.03 ** 9, 8);
+  });
+
   it('indexed with zero inflation equals unindexed', () => {
     const rows: ScheduleRow[] = [{ fromAge: 30, toAge: null, value: 1000 }];
     expect(resolveSchedule(rows, opts({ indexed: true, inflation: 0 }))).toEqual(

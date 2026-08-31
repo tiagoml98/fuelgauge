@@ -36,7 +36,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | M4 | Contributions are cut at the strategy's drawdown start age even if the growth scenario's schedules extend past it (noted in UI) | neutral | A run = scenario × strategy; the strategy wins |
 | M5 | Traditional 401k rolls to Traditional IRA at the **later of drawdown start and 59½**, so rule-of-55 withdrawals come from the plan until 59½; Roth 401k rolls at drawdown start (basis → basis, earnings → earnings). Assumes the plan permits partial withdrawals under rule of 55 | neutral | Gate #6; matches real-world behavior |
 | M6 | Unvested match is dropped at separation, using a single vesting % — no vesting schedule | conservative | |
-| M7 | Access at 59½ rounds to integer years: accessible the first year start-of-year age ≥ access age | conservative | Never unlocks early |
+| M7 | Access at 59½ rounds to integer years: open in the first year whose end-of-year age ≥ ⌈access age⌉ | ~neutral | Within ±6 months of the true date — Jan–Jun birthdays can unlock up to six months early |
 | M8 | Contribution limits and the Roth-catch-up threshold indexed by the model's single inflation rate, not actual IRS COLA rounding rules | neutral | Small drift over decades |
 | M9 | Taxable drag = dividend yield × dividend tax rate annually; **after-tax dividends are reinvested and become cost basis** (basis grows by start-of-year balance × yield × (1 − dividend tax rate) each year, plus contributions and windfalls); all other gains unrealized until sale; no capital-gain distributions, no tax-loss harvesting | mildly optimistic for taxable | M2 gate bug fix — basis is never just contributions |
 | M10 | HSA under "medical": ATE counts it at face value, but the default order never draws it | **mixed** | Optimistic for net worth (face value assumes qualified expenses ≥ balance forever); conservative for bridge/gap coverage (it never funds a year). Toggle "non-medical" to treat it like pre-tax |
@@ -54,7 +54,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | M22 | Birth year is derived as currentYear − currentAge, not entered (M1 #4) | neutral, small | Affects only the RMD 73/75 boundary and the 60–63 catch-up window, by at most one year |
 | M23 | Retirement income exceeding that year's need is saved to cash (after simple-mode tax) | neutral | M3: surplus is never silently discarded |
 | M24 | Windfalls still land during drawdown years — only *contributions* are cut at the drawdown start | neutral | An inheritance at 70 is an event, not a contribution |
-| M25 | Under "spending = SWR × ATE, real return = SWR," the real balance decays slowly instead of holding exactly flat — a consequence of discrete start-of-year withdrawals (M2): ≈0.83× after the ~30 years the SWR tooltip is calibrated to | conservative (longevity) | The engine matches the closed form b′ = (b − spend×(1+i)) × (1+r_real) exactly |
+| M25 | Start-of-year withdrawals mean a 4% draw at 4% real return declines to ~0.91× over 30 years rather than staying flat | conservative (longevity) | This is the Trinity/Bengen convention (year-one draw = 4% of the starting balance), conservative relative to end-of-year timing; the engine matches the closed form b′ = (b − spend) × (1+r_real) to the cent |
 
 ## 3. Out of scope — never modeled (SPEC §11)
 

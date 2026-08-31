@@ -103,6 +103,8 @@ export const DEFAULT_SAFE_WITHDRAWAL_RATE = 0.04;
 /** Gate #13: $0 ⇒ FIRE metrics show "—". */
 export const DEFAULT_FIRE_SPENDING_TARGET = 0;
 export const DEFAULT_COAST_TARGET_AGE = 65;
+/** M3 gate #6: $0 ⇒ Growth-tab Barista FIRE shows "—". */
+export const DEFAULT_BARISTA_INCOME_TARGET = 0;
 export const DEFAULT_MATCH_VESTING_PCT = 1;
 export const DEFAULT_CURRENT_AGE = 30;
 export const DEFAULT_THEME = 'dark' as const;
@@ -205,6 +207,7 @@ export function defaultAssumptions(currentYear: number): Assumptions {
     safeWithdrawalRate: DEFAULT_SAFE_WITHDRAWAL_RATE,
     fireSpendingTarget: DEFAULT_FIRE_SPENDING_TARGET,
     coastTargetAge: DEFAULT_COAST_TARGET_AGE,
+    baristaIncomeTarget: DEFAULT_BARISTA_INCOME_TARGET,
     inPlanConversion: false,
     inServiceWithdrawal: false,
     afterTaxContributions: false,

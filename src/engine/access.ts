@@ -4,7 +4,8 @@
  *
  * Rounding (M0 gate #17, operationalized at M3): a source is open in the
  * first year whose END-of-year age ≥ ceil(access age) — 59½ → the year they
- * turn 60; rule-of-55 at 56 → the year they turn 56. Never unlocks early.
+ * turn 60; rule-of-55 at 56 → the year they turn 56. Within ±6 months of the
+ * true date (Jan–Jun birthdays can unlock up to six months early) — M7.
  */
 
 import { separationAge } from './accumulate';

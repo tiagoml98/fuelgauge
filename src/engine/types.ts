@@ -203,6 +203,12 @@ export interface Assumptions {
   fireSpendingTarget: number;
   /** Gate #13: filer-1 age; Coast FIRE metric and drawdown-start fallback (gate #15). */
   coastTargetAge: number;
+  /**
+   * M3 gate #6: today's $/yr of assumed part-time income for the Growth-tab
+   * Barista FIRE metric. Optional (no migration); unset/0 ⇒ metric shows "—".
+   * The Drawdown tab's Barista metric uses the strategy's part-time rows.
+   */
+  baristaIncomeTarget?: number;
 
   inPlanConversion: boolean;
   inServiceWithdrawal: boolean;

@@ -38,8 +38,11 @@ import type {
 } from './types';
 
 /**
- * Gate #15: explicit ?? earliest filer separation age (converted to filer-1
- * age) ?? coastTargetAge; clamped into (current age, horizon].
+ * Gate #15, corrected at the M3 gate (#2): explicit ?? earliest filer
+ * separation age + 1 (converted to filer-1 age) ?? coastTargetAge; clamped
+ * into (current age, horizon]. The separation year keeps its salary and
+ * end-of-year contributions; the first withdrawal is at the start of the
+ * following year.
  */
 export function resolveDrawdownStart(
   a: Assumptions,
@@ -56,7 +59,7 @@ export function resolveDrawdownStart(
         return sep === null ? null : sep - (fl.currentAge - f1);
       })
       .filter((x): x is number => x !== null);
-    d = seps.length > 0 ? Math.min(...seps) : a.coastTargetAge;
+    d = seps.length > 0 ? Math.min(...seps) + 1 : a.coastTargetAge;
   }
   return Math.min(Math.max(d, f1 + 1), a.horizonAge);
 }
@@ -122,18 +125,21 @@ export function simulateRun(
   const ctx = createSimContext(a, g);
   const D = resolveDrawdownStart(a, g, w);
   const access = computeAccessAges(a, g);
-  const idxOpts = {
+  // Drawdown-year flows happen at the START of the year and are indexed to
+  // that year's start-of-year price level (M3 gate correction #1).
+  const startOpts = {
     startAge: ctx.startAge,
     endAge: a.horizonAge,
     indexed: a.indexWithInflation,
     inflation: a.inflation,
+    timing: 'startOfYear' as const,
   };
-  const spending = resolveSchedule(w.spending, idxOpts);
-  const oneTime = resolveOneTime(w.oneTimeExpenses, idxOpts);
+  const spending = resolveSchedule(w.spending, startOpts);
+  const oneTime = resolveOneTime(w.oneTimeExpenses, startOpts);
   // Income rows are additive streams — one row, one source (no overlap rule).
   const incomeRows = w.income.map((r) => ({
     kind: r.kind,
-    values: resolveSchedule([{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount }], idxOpts),
+    values: resolveSchedule([{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount }], startOpts),
   }));
 
   const notes: string[] = [];
@@ -199,7 +205,9 @@ export function simulateRun(
           if (s.roth401k > 0) {
             s.rothIra.basis += s.roth401kBasis;
             s.rothIra.earnings += s.roth401k - s.roth401kBasis;
-            s.rothIra.firstFundedYear ??= year; // rollover starts the clock (M11)
+            // Starts the clock ONLY if no Roth IRA was already funded (M11);
+            // an existing firstFundedYear governs.
+            s.rothIra.firstFundedYear ??= year;
             s.roth401k = 0;
             s.roth401kBasis = 0;
             s.matchRoth = 0;

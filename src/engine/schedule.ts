@@ -9,7 +9,6 @@ export interface ResolveOpts {
   /**
    * The row-owner's current age — "today" in their age domain. Per-filer rows
    * resolve with that filer's own current age (gate #1); callers map domains.
-   * The indexing exponent for age a is (a − startAge) = years from today.
    */
   startAge: number;
   /** Inclusive. */
@@ -17,6 +16,22 @@ export interface ResolveOpts {
   /** When true, today's-$ values are indexed to nominal at (1+inflation)^years. */
   indexed: boolean;
   inflation: number;
+  /**
+   * When a flow happens within its year (M3 gate correction #1).
+   * 'endOfYear' (default): exponent = age − startAge — contributions, windfalls.
+   * 'startOfYear': the flow is priced at that year's START — exponent =
+   * max(0, age − startAge − 1) — spending, one-time expenses, income rows,
+   * ladder rows (P2). Real display deflates these with the same exponent.
+   */
+  timing?: 'startOfYear' | 'endOfYear';
+}
+
+/** Indexing/deflation exponent for a flow at `yearsFromNow` under a timing convention. */
+export function timingExponent(
+  yearsFromNow: number,
+  timing: 'startOfYear' | 'endOfYear' = 'endOfYear',
+): number {
+  return timing === 'startOfYear' ? Math.max(0, yearsFromNow - 1) : yearsFromNow;
 }
 
 function validateOpts({ startAge, endAge }: ResolveOpts): void {
@@ -44,7 +59,7 @@ function validateRow(fromAge: number, toAge: number | null): void {
  */
 export function resolveSchedule(rows: ScheduleRow[], opts: ResolveOpts): number[] {
   validateOpts(opts);
-  const { startAge, endAge, indexed, inflation } = opts;
+  const { startAge, endAge, indexed, inflation, timing } = opts;
   const out = new Array<number>(endAge - startAge + 1).fill(0);
   for (const row of rows) {
     validateRow(row.fromAge, row.toAge);
@@ -56,7 +71,7 @@ export function resolveSchedule(rows: ScheduleRow[], opts: ResolveOpts): number[
   }
   if (indexed && inflation !== 0) {
     for (let i = 0; i < out.length; i++) {
-      out[i] *= Math.pow(1 + inflation, i);
+      out[i] *= Math.pow(1 + inflation, timingExponent(i, timing));
     }
   }
   return out;
@@ -69,14 +84,17 @@ export function resolveSchedule(rows: ScheduleRow[], opts: ResolveOpts): number[
  */
 export function resolveOneTime(rows: OneTimeRow[], opts: ResolveOpts): number[] {
   validateOpts(opts);
-  const { startAge, endAge, indexed, inflation } = opts;
+  const { startAge, endAge, indexed, inflation, timing } = opts;
   const out = new Array<number>(endAge - startAge + 1).fill(0);
   for (const row of rows) {
     if (!Number.isInteger(row.age)) {
       throw new Error(`one-time row age must be an integer (got ${row.age})`);
     }
     if (row.age < startAge || row.age > endAge) continue;
-    const factor = indexed && inflation !== 0 ? Math.pow(1 + inflation, row.age - startAge) : 1;
+    const factor =
+      indexed && inflation !== 0
+        ? Math.pow(1 + inflation, timingExponent(row.age - startAge, timing))
+        : 1;
     out[row.age - startAge] += row.amount * factor;
   }
   return out;

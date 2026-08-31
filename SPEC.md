@@ -119,7 +119,7 @@ Monte Carlo or any probabilistic engine; IRMAA; ACA subsidy modeling; 72(t)/SEPP
 - Split: 401k $20k at 50% Roth → $10k each under one shared limit; catch-up at 50 and higher catch-up at 60–63. Couple: limits summed, match per filer salary.
 - ATE: pre-tax-only portfolio = gross × (1 − rate). Coast FIRE matches a hand-computed case.
 - **Growth tab is growth-only:** the growth chart of a run never declines after drawdown start; the Drawdown tab chart of the same run does.
-- Drawdown: spending = SWR × ATE at start and real return = SWR → real balance roughly flat.
+- Drawdown: spending = SWR × ATE at start and real return = SWR → real balance matches the closed form to the cent (start-of-year withdrawals: bₖ = b* − (b* − b₀)(1+SWR)ᵏ with b* = spend×(1+SWR)/SWR), and is ≥ 0.9× the starting balance 30 years in.
 - Locked money: drawdown at 45, all pre-tax, no cash/taxable → gap at 45. Rule of 55: separation at 56 → Traditional 401k open at 56, Traditional IRA at 59½. Roth clock: first funded 3 years ago at 59½ → earnings locked 2 more years.
 - **Matrix:** 2 growth scenarios × 2 strategies → 4 runs; each cell's metrics match the Drawdown tab for that pair; selecting two cells overlays them with the correct crossover; URL and JSON round-trip all scenarios, strategies, and assumptions.
 - Stress preset lowers drawdown-start ATE vs base. All inputs live; every chart, table, and metric updates on change.

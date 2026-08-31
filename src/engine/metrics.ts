@@ -43,8 +43,19 @@ export function fullFireAge(years: RunYear[], a: Assumptions, spendReal: number)
 }
 
 /**
- * Barista FIRE (M3 decision #8, proposed definition): Full FIRE against
- * spending net of the strategy's part-time income at drawdown start.
+ * Growth-tab Barista FIRE (M3 gate #6): Full FIRE against the assumptions'
+ * spending target net of the assumed part-time income target. "—" (null)
+ * until both targets are set.
+ */
+export function baristaFireAgeFromAssumptions(years: RunYear[], a: Assumptions): number | null {
+  const income = a.baristaIncomeTarget ?? 0;
+  if (a.fireSpendingTarget <= 0 || income <= 0) return null;
+  return fullFireAge(years, a, Math.max(0, a.fireSpendingTarget - income));
+}
+
+/**
+ * Drawdown-tab Barista FIRE (M3 decision #8): Full FIRE against spending net
+ * of the strategy's part-time income at drawdown start.
  */
 export function baristaFireAge(
   years: RunYear[],
@@ -108,6 +119,7 @@ export function analyzeBridge(run: RunResult, a: Assumptions, w: WithdrawalStrat
     endAge: a.horizonAge,
     indexed: a.indexWithInflation,
     inflation: a.inflation,
+    timing: 'startOfYear', // spending is a start-of-year flow (M3 correction #1)
   });
   return {
     years,

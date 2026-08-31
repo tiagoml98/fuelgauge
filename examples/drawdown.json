@@ -103,7 +103,7 @@
     },
     {
       "id": "swr-flat",
-      "name": "Case (b): spending = 4% of the $1M Roth ATE at start, real return = 4% -> real Roth balance roughly flat (slow decay from start-of-year withdrawals, ASSUMPTIONS M2)",
+      "name": "Case (b): spending = 4% of the $1M Roth ATE at start, real return = 4% -> real Roth follows 1,040,000 - 40,000 x 1.04^k to the cent; ~0.91x after 30 years (Trinity/Bengen timing, ASSUMPTIONS M25)",
       "drawdownStartAge": 45,
       "spending": [{ "fromAge": 0, "toAge": null, "value": 40000 }],
       "oneTimeExpenses": [],

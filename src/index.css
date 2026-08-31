@@ -1,0 +1,13 @@
+@import 'tailwindcss';
+
+/* Class-driven dark mode (display.theme), not media-query-driven */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Numeric columns align (dataviz: tabular figures only where columns align) */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}

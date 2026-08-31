@@ -14,7 +14,7 @@ import { useStore } from '../../state/store';
 import { GrowthChart } from '../components/GrowthChart';
 import { fmtMoney0, fmtMoneyM } from './inputs';
 
-function Lens({
+export function Lens({
   value,
   a: optionA,
   b: optionB,

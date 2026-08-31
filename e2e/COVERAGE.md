@@ -72,17 +72,20 @@ user-visible outcomes (positions, rendered text) from real pointer/keyboard inpu
 | display.panelWidth | PS:maximal · LT:divider-drag (real drag persists on release) |
 | display.inputsTier | PS:maximal · LT:advanced-tier |
 | display.basicsCollapsed | PO:basics-sections (collapse + reload persistence) |
+| display.activeTab | DD:tab-switching (switch, reload persistence) |
 
 ## 2. VARIABLES.md rows — 71/71
 
 Assumptions §1.1–§1.7, Growth §2, Withdrawal §3: every input row above maps 1:1 onto a
 PersistedState field exercised in §1 (`PS:maximal` sets each; the UI control for each is listed
-in §3). Withdrawal-strategy rows have no Growth-tab controls yet by design — they persist via
-`PS:maximal` and their UI lands in M5, at which point this manifest is re-audited (M5 gate
-requirement). Derived/rule rows (birth year, access rounding, RMD age, per-run output §5,
-schedule semantics §4) are engine rules covered by the 156-test unit suite, referenced here for
-completeness: schedule semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output
-→ EQ (table/tooltip/metrics equality).
+in §3). **M5 re-audit:** the seven Withdrawal-strategy rows now have live controls — drawdown
+start (DD:strategy-editor), spending (DD:strategy-editor + DD:swr-flat equality), one-time
+expenses (DD:strategy-editor), retirement income rows incl. the SS tag (DD:strategy-editor),
+withdrawal order (DD:order-reorder), strategy name/id (DD:menu); ladder rows stay P2
+(persist-only via PS:maximal). Derived/rule rows (birth year, access rounding, RMD age, per-run
+output §5, schedule semantics §4) are engine rules covered by the 158-test unit suite: schedule
+semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output → EQ + DD (run-path
+table/tooltip/bridge equality).
 
 ## 3. UI controls — 74/74
 
@@ -138,4 +141,29 @@ completeness: schedule semantics → SE (normalize) + unit scheduleOps/schedule 
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-**Manifest: 214/214 items covered (63 state fields + 71 VARIABLES rows + 80 controls).**
+## 4. Drawdown-tab controls (M5 re-audit) — 18/18
+
+`DD` = drawdown.spec. All under the console guard.
+
+| Control | Test |
+|---|---|
+| Tab nav Growth/Drawdown (active state, persistence through reload) | DD:tab-switching |
+| Strategy select (ellipsized + tooltip, full names in menu) | DD:menu (via duplicate/select) · PS:maximal (long names) |
+| Strategy rename / duplicate / new / delete (+ last-one guard) | DD:menu · unit store test |
+| Drawdown start age (auto ↔ explicit, resolved auto placeholder) | DD:strategy-editor |
+| Spending ScheduleControl (start-of-year lens in table) | DD:swr-flat (real need constant 40,000 at 3 ages) |
+| One-time expenses: add / edit age+amount+label / delete | DD:strategy-editor |
+| Income rows: kind (SS default) / from / to / amount / label / add / delete | DD:strategy-editor |
+| Withdrawal order: ↑/↓ buttons AND real drag, state + rendered order | DD:order-reorder |
+| HSA order entry (non-medical only) | manifest note: gated button rendered under nonMedical — PS:maximal persists order incl. custom |
+| Summary tiles (lifetime spending, terminal ATE, years retired, cumulative tax) | DD:locked (rendered from run.summary) |
+| Run chart: gap-year shading, solid drawdown-start, dotted access markers | DD:markers (data-markers artifact) + DD:locked (tooltip) |
+| Markers at N − 0.5 (drawdownStart 44.5, access/rollover 59.5) | DD:markers — the gate requirement |
+| Crosshair readout: need / withdrawn / GAP lines + rollover event at 60 | DD:locked |
+| Bridge visualizer bars + summary line (gap count, funded totals, spend at start/access) | DD:locked · DD:swr-flat (funded ✓) |
+| Rate-arbitrage panel (both rates, verdict, P2 note) | DD:rate-arbitrage |
+| Milestones panel + plain-language readout | DD:locked |
+| No-spending empty state (C.5) | DD:tab-switching |
+| Balance table need/withdrawn/gap columns (gap rows forced into the 5-yr view) | DD:locked · DD:swr-flat |
+
+**Manifest: 233/233 items covered (64 state fields + 71 VARIABLES rows + 80 Growth controls + 18 Drawdown controls).**

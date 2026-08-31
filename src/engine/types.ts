@@ -451,6 +451,8 @@ export interface DisplayState {
   inputsTier?: 'basics' | 'advanced';
   /** Collapsed Basics section ids (M4.5 item 4). Optional; unset = all expanded. */
   basicsCollapsed?: string[];
+  /** Active tab (M5). Optional; unset = growth. Compare arrives in M6. */
+  activeTab?: 'growth' | 'drawdown';
 }
 
 /**

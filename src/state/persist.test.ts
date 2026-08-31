@@ -48,4 +48,27 @@ describe('store reducer', () => {
     const state = defaultPersistedState(2026);
     expect(reducer(state, { type: 'deleteScenario', id: state.growthScenarios[0].id })).toBe(state);
   });
+
+  it('strategy actions mirror scenario actions (M5)', () => {
+    const state = defaultPersistedState(2026);
+    const dup = reducer(state, { type: 'duplicateStrategy', id: state.strategies[0].id });
+    expect(dup.strategies).toHaveLength(2);
+    expect(dup.strategies[1].id).not.toBe(dup.strategies[0].id);
+    expect(dup.display.selectedStrategyId).toBe(dup.strategies[1].id);
+
+    const renamed = reducer(dup, { type: 'renameStrategy', id: dup.strategies[1].id, name: 'Retire at 50' });
+    expect(renamed.strategies[1].name).toBe('Retire at 50');
+
+    const patched = reducer(renamed, {
+      type: 'patchStrategy',
+      id: renamed.strategies[1].id,
+      patch: { drawdownStartAge: 50 },
+    });
+    expect(patched.strategies[1].drawdownStartAge).toBe(50);
+    expect(patched.strategies[0].drawdownStartAge).toBeUndefined(); // untouched
+
+    const deleted = reducer(patched, { type: 'deleteStrategy', id: patched.strategies[1].id });
+    expect(deleted.strategies).toHaveLength(1);
+    expect(reducer(deleted, { type: 'deleteStrategy', id: deleted.strategies[0].id })).toBe(deleted);
+  });
 });

@@ -44,14 +44,24 @@ const REGIME_KINDS: ReadonlySet<MarkerEventKind> = new Set([
   'rollover',
 ]);
 
+/** SPEC §13 marker taxonomy: solid = drawdown start, dotted = access ages, dashed = the rest. */
+const MARKER_LINE: Record<string, { type: 'solid' | 'dotted' | 'dashed'; width: number }> = {
+  drawdownStart: { type: 'solid', width: 1.5 },
+  accessAge: { type: 'dotted', width: 1 },
+  default: { type: 'dashed', width: 1 },
+};
+const KIND_PRIORITY: MarkerEventKind[] = ['drawdownStart', 'accessAge', 'rollover'];
+
 export function GrowthChart({
   years,
   a,
   display,
+  variant = 'growth',
 }: {
   years: RunYear[];
   a: Assumptions;
   display: DisplayState;
+  variant?: 'growth' | 'run';
 }) {
   const mode = display.theme;
   const chrome = CHROME[mode];
@@ -85,7 +95,7 @@ export function GrowthChart({
     };
   }, []);
 
-  const option = useMemo(() => {
+  const { option, markerArtifact } = useMemo(() => {
     const seriesDefs = display.byBuckets
       ? BUCKET_ORDER.map((b) => ({
           name: BUCKET_LABELS[b],
@@ -115,30 +125,54 @@ export function GrowthChart({
       };
     });
 
-    // Short labels on the lines ("401k stop", "IPO"); full text in the crosshair readout
+    // Short labels on the lines ("401k stop", "IPO"); full text in the crosshair readout.
+    // Regime changes render at N − 0.5, one-time events at N (M4.5 B.4).
     const singleFiler = a.filers.length === 1;
-    const markAges = new Map<number, string[]>();
+    const markAges = new Map<number, { labels: string[]; kinds: MarkerEventKind[] }>();
     for (const y of years) {
       for (const e of y.events) {
         if (e.kind === 'windfall' || REGIME_KINDS.has(e.kind)) {
           const x = REGIME_KINDS.has(e.kind) ? e.age - 0.5 : e.age;
-          markAges.set(x, [...(markAges.get(x) ?? []), shortMarkerLabel(e, singleFiler)]);
+          const entry = markAges.get(x) ?? { labels: [], kinds: [] };
+          entry.labels.push(shortMarkerLabel(e, singleFiler));
+          entry.kinds.push(e.kind);
+          markAges.set(x, entry);
         }
       }
     }
-    const markLineData = [...markAges.entries()].map(([x, labels]) => ({
-      xAxis: x,
-      label: {
-        formatter: joinMarkerLabels(labels),
-        rotate: 90,
-        position: 'insideEndTop' as const,
-        color: chrome.inkMuted,
-        fontSize: 10,
-      },
-      lineStyle: { type: 'dashed' as const, color: chrome.inkMuted, width: 1 },
-    }));
+    const markLineData = [...markAges.entries()].map(([x, { labels, kinds }]) => {
+      const kind = KIND_PRIORITY.find((k) => kinds.includes(k)) ?? kinds[0];
+      const style = MARKER_LINE[kind] ?? MARKER_LINE.default;
+      return {
+        xAxis: x,
+        label: {
+          formatter: joinMarkerLabels(labels),
+          rotate: 90,
+          position: 'insideEndTop' as const,
+          color: chrome.inkMuted,
+          fontSize: 10,
+        },
+        lineStyle: {
+          type: style.type,
+          color: kind === 'drawdownStart' ? chrome.inkSecondary : chrome.inkMuted,
+          width: style.width,
+        },
+      };
+    });
+    const markerArtifact = [...markAges.entries()]
+      .map(([x, { kinds }]) => ({ x, kind: KIND_PRIORITY.find((k) => kinds.includes(k)) ?? kinds[0] }))
+      .sort((p, q) => p.x - q.x);
 
-    return {
+    // Contiguous gap-year bands for the run variant's shading
+    const gapRanges: Array<[{ xAxis: number }, { xAxis: number }]> = [];
+    for (const y of years) {
+      if (!y.gap) continue;
+      const last = gapRanges[gapRanges.length - 1];
+      if (last && last[1].xAxis === y.age - 1 + 0.5) last[1] = { xAxis: y.age + 0.5 };
+      else gapRanges.push([{ xAxis: y.age - 0.5 }, { xAxis: y.age + 0.5 }]);
+    }
+
+    const option = {
       backgroundColor: 'transparent',
       animation: false,
       grid: { left: 64, right: 24, top: 36, bottom: 36 },
@@ -155,10 +189,14 @@ export function GrowthChart({
         type: 'value',
         min: startAge,
         max: years[years.length - 1]?.age ?? startAge + 1,
-        interval: 5,
+        minInterval: 1, // integer ages only — no fractional ticks when zoomed
         axisLine: { lineStyle: { color: chrome.axis } },
         axisTick: { show: false },
-        axisLabel: { color: chrome.inkMuted, fontSize: 10, formatter: (v: number) => String(v) },
+        axisLabel: {
+          color: chrome.inkMuted,
+          fontSize: 10,
+          formatter: (v: number) => (Number.isInteger(v) ? String(v) : ''),
+        },
       },
       yAxis: {
         type: 'value',
@@ -216,11 +254,24 @@ export function GrowthChart({
                 `<div style="color:${chrome.inkMuted};font-size:10px;margin-top:2px">◆ ${e.label}</div>`,
             )
             .join('');
+          // Drawdown years: need / withdrawn / gap in the crosshair readout
+          const drawLines =
+            y.need !== undefined
+              ? `<div style="display:flex;justify-content:space-between;gap:16px;margin-top:4px;color:${chrome.inkSecondary}">
+                   <span>need</span><span class="tnum">${fmtMoney(lens(y.need, y.age))}</span></div>
+                 <div style="display:flex;justify-content:space-between;gap:16px;color:${chrome.inkSecondary}">
+                   <span>withdrawn (gross)</span><span class="tnum">${fmtMoney(
+                     lens(Object.values(y.withdrawals ?? {}).reduce((s, v) => s + (v ?? 0), 0), y.age),
+                   )}</span></div>` +
+                (y.gap
+                  ? `<div style="color:#d03b3b;font-weight:600;margin-top:2px">⚠ GAP — need unmet by ${fmtMoney(lens(y.unmet ?? 0, y.age))}</div>`
+                  : '')
+              : '';
           return `<div style="font-weight:600;margin-bottom:4px">Age ${y.age} · ${y.year} · ${
             display.real ? "today's $" : 'nominal'
           } · ${display.ate ? 'after-tax equivalent' : 'gross'}</div>${rows}
           <div style="display:flex;justify-content:space-between;gap:16px;border-top:1px solid ${chrome.grid};margin-top:4px;padding-top:4px">
-            <span>Total</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtMoney(total)}</span></div>${eventLines}`;
+            <span>Total</span><span style="font-weight:600;font-variant-numeric:tabular-nums">${fmtMoney(total)}</span></div>${drawLines}${eventLines}`;
         },
       },
       series: seriesDefs.map((s, i) => ({
@@ -234,14 +285,29 @@ export function GrowthChart({
         lineStyle: { width: 2, color: chrome.surface },
         areaStyle: { color: s.color, opacity: 1 },
         emphasis: { disabled: true },
-        ...(i === 0 ? { markLine: { silent: true, symbol: 'none', data: markLineData } } : {}),
+        ...(i === 0
+          ? {
+              markLine: { silent: true, symbol: 'none', data: markLineData },
+              // run variant: shade gap years (status-critical wash, labeled in tooltip)
+              ...(variant === 'run' && gapRanges.length > 0
+                ? {
+                    markArea: {
+                      silent: true,
+                      itemStyle: { color: 'rgba(208, 59, 59, 0.09)' },
+                      data: gapRanges,
+                    },
+                  }
+                : {}),
+            }
+          : {}),
       })),
     };
+    return { option, markerArtifact };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [years, a, display, mode]);
+  }, [years, a, display, mode, variant]);
 
   return (
-    <div ref={wrapRef}>
+    <div ref={wrapRef} data-markers={JSON.stringify(markerArtifact)}>
       <ReactECharts ref={chartRef} option={option} style={{ height: 420 }} notMerge autoResize={false} theme={undefined} />
     </div>
   );

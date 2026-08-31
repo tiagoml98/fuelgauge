@@ -19,12 +19,14 @@ import {
   defaultFilerBalances,
   defaultFilerGrowthInputs,
   defaultGrowthScenario,
+  defaultWithdrawalStrategy,
 } from '../engine/defaults';
 import type {
   Assumptions,
   DisplayState,
   GrowthScenario,
   PersistedState,
+  WithdrawalStrategy,
 } from '../engine/types';
 import { loadInitialState, writeHash } from './persist';
 
@@ -35,6 +37,11 @@ export type Action =
   | { type: 'duplicateScenario'; id: string }
   | { type: 'renameScenario'; id: string; name: string }
   | { type: 'deleteScenario'; id: string }
+  | { type: 'patchStrategy'; id: string; patch: Partial<WithdrawalStrategy> }
+  | { type: 'addStrategy' }
+  | { type: 'duplicateStrategy'; id: string }
+  | { type: 'renameStrategy'; id: string; name: string }
+  | { type: 'deleteStrategy'; id: string }
   | { type: 'setFilerCount'; count: 1 | 2 }
   | { type: 'patchDisplay'; patch: Partial<DisplayState> }
   | { type: 'replaceState'; state: PersistedState };
@@ -90,6 +97,46 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
         ...state,
         growthScenarios: remaining,
         display: { ...state.display, selectedScenarioId: remaining[0].id },
+      };
+    }
+    case 'patchStrategy':
+      return {
+        ...state,
+        strategies: state.strategies.map((w) => (w.id === action.id ? { ...w, ...action.patch } : w)),
+      };
+    case 'addStrategy': {
+      const w = defaultWithdrawalStrategy(state.assumptions, newId());
+      w.name = `Strategy ${state.strategies.length + 1}`;
+      return {
+        ...state,
+        strategies: [...state.strategies, w],
+        display: { ...state.display, selectedStrategyId: w.id },
+      };
+    }
+    case 'duplicateStrategy': {
+      const source = state.strategies.find((w) => w.id === action.id);
+      if (!source) return state;
+      const copy: WithdrawalStrategy = structuredClone(source);
+      copy.id = newId();
+      copy.name = `${source.name} (copy)`;
+      return {
+        ...state,
+        strategies: [...state.strategies, copy],
+        display: { ...state.display, selectedStrategyId: copy.id },
+      };
+    }
+    case 'renameStrategy':
+      return {
+        ...state,
+        strategies: state.strategies.map((w) => (w.id === action.id ? { ...w, name: action.name } : w)),
+      };
+    case 'deleteStrategy': {
+      if (state.strategies.length <= 1) return state; // never delete the last one
+      const remaining = state.strategies.filter((w) => w.id !== action.id);
+      return {
+        ...state,
+        strategies: remaining,
+        display: { ...state.display, selectedStrategyId: remaining[0].id },
       };
     }
     case 'setFilerCount': {
@@ -155,5 +202,13 @@ export function useSelectedScenario(): GrowthScenario {
   return (
     state.growthScenarios.find((g) => g.id === state.display.selectedScenarioId) ??
     state.growthScenarios[0]
+  );
+}
+
+/** The strategy being edited: selected id, else the first. */
+export function useSelectedStrategy(): WithdrawalStrategy {
+  const { state } = useStore();
+  return (
+    state.strategies.find((w) => w.id === state.display.selectedStrategyId) ?? state.strategies[0]
   );
 }

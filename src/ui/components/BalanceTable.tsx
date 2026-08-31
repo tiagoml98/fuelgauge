@@ -1,7 +1,11 @@
-/** Balance table below the chart: every 5 years, expandable to yearly (SPEC §3). */
+/**
+ * Balance table below the chart: every 5 years, expandable to yearly (SPEC §3).
+ * Run years additionally show need / withdrawn / gap (M5) — start-of-year
+ * flows deflate with the start-of-year exponent (M3 correction #1).
+ */
 
 import { ateByAccount } from '../../engine/ate';
-import { toReal } from '../../engine/schedule';
+import { timingExponent, toReal } from '../../engine/schedule';
 import type { Assumptions, DisplayState, RunYear } from '../../engine/types';
 import { ACCOUNT_LABELS, ACCOUNT_ORDER } from '../theme/colors';
 import { buttonCls } from './fields';
@@ -22,11 +26,16 @@ export function BalanceTable({
 }) {
   const startAge = years[0]?.age ?? 0;
   const last = years[years.length - 1]?.age;
+  const hasRun = years.some((y) => y.need !== undefined);
   const rows = display.yearlyTable
     ? years
-    : years.filter((y) => y.age % 5 === 0 || y.age === startAge || y.age === last);
+    : years.filter(
+        (y) => y.age % 5 === 0 || y.age === startAge || y.age === last || (y.gap && hasRun),
+      );
   const lens = (v: number, age: number) =>
     display.real ? toReal(v, age - startAge, a.inflation) : v;
+  const lensStart = (v: number, age: number) =>
+    display.real ? toReal(v, timingExponent(age - startAge, 'startOfYear'), a.inflation) : v;
 
   return (
     <div className="rounded border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
@@ -52,6 +61,13 @@ export function BalanceTable({
                 </th>
               ))}
               <th className="py-1 pl-3 font-semibold">Total</th>
+              {hasRun && (
+                <>
+                  <th className="py-1 pl-3 font-normal">Need</th>
+                  <th className="py-1 pl-3 font-normal">Withdrawn</th>
+                  <th className="py-1 pl-3 font-normal">Gap</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="text-neutral-800 dark:text-neutral-200">
@@ -68,6 +84,34 @@ export function BalanceTable({
                   <td className="py-1 pl-3 font-semibold">
                     {money(lens(display.ate ? y.totalAte : y.total, y.age))}
                   </td>
+                  {hasRun && (
+                    <>
+                      <td className="py-1 pl-3">
+                        {y.need !== undefined ? money(lensStart(y.need, y.age)) : '—'}
+                      </td>
+                      <td className="py-1 pl-3">
+                        {y.withdrawals
+                          ? money(
+                              lensStart(
+                                Object.values(y.withdrawals).reduce((s, v) => s + (v ?? 0), 0),
+                                y.age,
+                              ),
+                            )
+                          : '—'}
+                      </td>
+                      <td className="py-1 pl-3">
+                        {y.gap ? (
+                          <span className="font-semibold text-[#d03b3b]" data-gap-age={y.age}>
+                            GAP
+                          </span>
+                        ) : y.need !== undefined ? (
+                          '—'
+                        ) : (
+                          ''
+                        )}
+                      </td>
+                    </>
+                  )}
                 </tr>
               );
             })}

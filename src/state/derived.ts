@@ -8,12 +8,25 @@
 import { useMemo, useRef } from 'react';
 import { simulateAccumulation } from '../engine/accumulate';
 import {
+  analyzeBridge,
+  baristaFireAge,
   baristaFireAgeFromAssumptions,
   coastFireAge,
   fireNumber,
   firstAgeAtValue,
+  fullFireAge,
 } from '../engine/metrics';
-import type { Assumptions, GrowthScenario, RunYear, ScheduleRow } from '../engine/types';
+import { simulateRun } from '../engine/run';
+import { toReal } from '../engine/schedule';
+import type {
+  Assumptions,
+  BridgeReport,
+  GrowthScenario,
+  RunResult,
+  RunYear,
+  ScheduleRow,
+  WithdrawalStrategy,
+} from '../engine/types';
 import { validateRows } from './scheduleOps';
 
 function namedSchedules(a: Assumptions, g: GrowthScenario): Array<[string, ScheduleRow[]]> {
@@ -78,6 +91,91 @@ export interface GrowthMetrics {
   coastAge: number | null;
   baristaAge: number | null;
   millionAge: number | null;
+}
+
+function strategyScheduleErrors(w: WithdrawalStrategy): string[] {
+  const named: Array<[string, ScheduleRow[]]> = [
+    ['Spending', w.spending],
+    ...w.income.map(
+      (r, i): [string, ScheduleRow[]] => [
+        `Income row ${i + 1}`,
+        [{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount }],
+      ],
+    ),
+  ];
+  return named.flatMap(([name, rows]) =>
+    validateRows(rows).map((e) => `${name}${rows.length > 1 ? `, row ${e.index + 1}` : ''}: ${e.message}`),
+  );
+}
+
+export interface SafeRunResult {
+  run: RunResult | null;
+  errors: string[];
+}
+
+/** Run-path twin of safeSimulate (M4.5 B.1b): validation first, never throws. */
+export function safeSimulateRun(
+  a: Assumptions,
+  g: GrowthScenario,
+  w: WithdrawalStrategy,
+): SafeRunResult {
+  const errors = [...collectScheduleErrors(a, g), ...strategyScheduleErrors(w)];
+  if (errors.length > 0) return { run: null, errors };
+  try {
+    return { run: simulateRun(a, g, w), errors: [] };
+  } catch (err) {
+    return { run: null, errors: [err instanceof Error ? err.message : String(err)] };
+  }
+}
+
+/** Run + last-good fallback: the Drawdown tab never blanks on a partial edit. */
+export function useRun(
+  a: Assumptions,
+  g: GrowthScenario,
+  w: WithdrawalStrategy,
+): { run: RunResult | null; errors: string[] } {
+  const result = useMemo(() => safeSimulateRun(a, g, w), [a, g, w]);
+  const lastGood = useRef<RunResult | null>(null);
+  if (result.run) lastGood.current = result.run;
+  return { run: result.run ?? lastGood.current, errors: result.errors };
+}
+
+export function useBridge(
+  run: RunResult | null,
+  a: Assumptions,
+  w: WithdrawalStrategy,
+): BridgeReport | null {
+  return useMemo(() => (run ? analyzeBridge(run, a, w) : null), [run, a, w]);
+}
+
+export interface DrawdownMetrics {
+  fullAge: number | null;
+  baristaAge: number | null;
+  millionAge: number | null;
+  /** real ATE at drawdown start ÷ FIRE number − 1; null without a target. */
+  marginOverTarget: number | null;
+}
+
+export function useDrawdownMetrics(run: RunResult | null, a: Assumptions, w: WithdrawalStrategy): DrawdownMetrics {
+  return useMemo(() => {
+    if (!run) return { fullAge: null, baristaAge: null, millionAge: null, marginOverTarget: null };
+    const spendReal = a.fireSpendingTarget > 0 ? a.fireSpendingTarget : null;
+    const startRow = run.years.find((y) => y.age === run.drawdownStartAge - 1) ?? run.years[0];
+    const startAge = run.years[0].age;
+    const margin =
+      spendReal !== null
+        ? toReal(startRow.totalAte, startRow.age - startAge, a.inflation) /
+            fireNumber(spendReal, a.safeWithdrawalRate) -
+          1
+        : null;
+    return {
+      fullAge: spendReal !== null ? fullFireAge(run.years, a, spendReal) : null,
+      baristaAge:
+        spendReal !== null ? baristaFireAge(run.years, a, spendReal, w, run.drawdownStartAge) : null,
+      millionAge: firstAgeAtValue(run.years, 1_000_000, a.inflation),
+      marginOverTarget: margin,
+    };
+  }, [run, a, w]);
 }
 
 export function useGrowthMetrics(

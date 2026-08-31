@@ -112,7 +112,7 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 | Pre-tax access age — per filer per pre-tax account | Assumptions (auto-filled from the growth scenario) | age (own age) | 59½; Traditional 401k auto-fills to the **scenario's** separation age when separation ≥ 55 (rule of 55), shown editable. `computeAccessAges(assumptions, scenario)` | access (M3) |
 | Roth-earnings access | — | derived | 59½ **and** 5 years since Roth IRA first funding | access (M3) |
 | RMD start age — per filer | — | derived from birth year | 73 (born 1951–59), 75 (1960+) | rmd (M10) |
-| Integer-year treatment of 59½ | — | rule (confirmed at gate) | money is accessible from the first drawdown year in which the filer's age at the start of the year ≥ the access age (59½ → the year they turn 60; rule-of-55 age 56 → the year they turn 56). Conservative — never unlocks early | access (M3) |
+| Integer-year treatment of 59½ | — | rule (confirmed at gate; operationalized M3) | a source is open in the first year whose **end-of-year age ≥ ⌈access age⌉** — 59½ → the year they turn 60; rule-of-55 age 56 → the year they turn 56. Conservative — never unlocks early | access (M3): `accessOpen` |
 
 ---
 

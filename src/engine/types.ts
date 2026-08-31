@@ -368,9 +368,12 @@ export interface RunYear {
   locked: number;
   taxPaidThisYear: number;
   cumulativeTax: number;
-  /** Drawdown years only. */
+  /** Drawdown years only. need = net portfolio need after income offset (M3). */
   need?: number;
+  /** Gross per-account draws (incl. tax gross-up). */
   withdrawals?: Partial<Record<AccountId, number>>;
+  /** Unfunded remainder of need — 0 when fully funded; > 0 ⇔ gap. */
+  unmet?: number;
   /** Accessible sources ran out — reported, not covered (SPEC §6). */
   gap: boolean;
   events: MarkerEvent[];

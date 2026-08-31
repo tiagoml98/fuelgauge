@@ -1,11 +1,12 @@
 /**
- * npm run table -- <input.json> [--scenario <id>]
+ * npm run table -- <input.json> [--scenario <id>] [--strategy <id>] [--growth-only]
  *
  * Prints the year-by-year per-account table for a PersistedState JSON (the
- * same shape the app exports), for hand-checking against a spreadsheet before
- * any UI exists (SPEC §14 M2). Three sections: nominal, real (today's $ via
- * the engine's toReal), and ATE in real dollars. Growth-only in M2; extends
- * through drawdown in M3.
+ * same shape the app exports), for hand-checking against a spreadsheet
+ * (SPEC §14 M2/M3). Default runs the full run (growth × withdrawal strategy)
+ * with need / withdrawn / gap columns; --growth-only keeps the M2 view.
+ * Sections: nominal, real (today's $ via the engine's toReal), ATE (real),
+ * per-account withdrawals, and markers.
  */
 
 import { readFileSync } from 'node:fs';
@@ -13,6 +14,7 @@ import { simulateAccumulation } from '../src/engine/accumulate';
 import { ateByAccount } from '../src/engine/ate';
 import { ALL_ACCOUNTS } from '../src/engine/defaults';
 import { migratePersistedState } from '../src/engine/persist';
+import { simulateRun } from '../src/engine/run';
 import { toReal } from '../src/engine/schedule';
 import type { RunYear } from '../src/engine/types';
 
@@ -22,10 +24,18 @@ function fail(message: string): never {
 }
 
 const args = process.argv.slice(2);
-const scenarioFlag = args.indexOf('--scenario');
-const scenarioId = scenarioFlag >= 0 ? args[scenarioFlag + 1] : undefined;
-const file = args.find((x, i) => !x.startsWith('--') && (scenarioFlag < 0 || i !== scenarioFlag + 1));
-if (!file) fail('usage: npm run table -- <input.json> [--scenario <id>]');
+const flagValue = (name: string): string | undefined => {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+};
+const scenarioId = flagValue('--scenario');
+const strategyId = flagValue('--strategy');
+const growthOnly = args.includes('--growth-only');
+const consumed = new Set(
+  [scenarioId, strategyId].filter((v): v is string => v !== undefined),
+);
+const file = args.find((x) => !x.startsWith('--') && !consumed.has(x));
+if (!file) fail('usage: npm run table -- <input.json> [--scenario <id>] [--strategy <id>] [--growth-only]');
 
 const state = (() => {
   try {
@@ -41,17 +51,28 @@ const scenario = scenarioId
 if (!scenario) {
   fail(`scenario "${scenarioId}" not found (have: ${state.growthScenarios.map((g) => g.id).join(', ')})`);
 }
+const strategy = strategyId
+  ? state.strategies.find((s) => s.id === strategyId)
+  : state.strategies[0];
+if (!growthOnly && !strategy) {
+  fail(`strategy "${strategyId}" not found (have: ${state.strategies.map((s) => s.id).join(', ')})`);
+}
 
 const a = state.assumptions;
-const years = simulateAccumulation(a, scenario);
+const run = growthOnly || !strategy ? null : simulateRun(a, scenario, strategy);
+const years = run ? run.years : simulateAccumulation(a, scenario);
 const startAge = a.filers[0].currentAge;
 const yearsFromNow = (y: RunYear) => y.age - startAge;
 
-const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax'] as const;
+const EXTRA = run ? (['need', 'wdrawn', 'gap'] as const) : ([] as const);
+const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax', ...EXTRA] as const;
 type Col = (typeof COLS)[number];
-const WIDTH = 14;
+const WIDTH = 13;
 
-function nominalValue(y: RunYear, col: Col): number {
+const wdTotal = (y: RunYear) =>
+  Object.values(y.withdrawals ?? {}).reduce((s, v) => s + (v ?? 0), 0);
+
+function nominalValue(y: RunYear, col: Col): number | string {
   switch (col) {
     case 'total':
       return y.total;
@@ -61,46 +82,89 @@ function nominalValue(y: RunYear, col: Col): number {
       return y.taxPaidThisYear;
     case 'cumTax':
       return y.cumulativeTax;
+    case 'need':
+      return y.need ?? 0;
+    case 'wdrawn':
+      return wdTotal(y);
+    case 'gap':
+      return y.gap ? 'GAP' : '';
     default:
       return y.accounts[col].balance;
   }
 }
 
-function ateNominalValue(y: RunYear, col: Col): number {
+function ateNominalValue(y: RunYear, col: Col): number | string {
   if (col === 'total' || col === 'totalAte') return y.totalAte;
-  if (col === 'tax') return y.taxPaidThisYear;
-  if (col === 'cumTax') return y.cumulativeTax;
+  if (col === 'tax' || col === 'cumTax' || col === 'need' || col === 'wdrawn' || col === 'gap') {
+    return nominalValue(y, col);
+  }
   return ateByAccount(y.accounts, a)[col];
 }
 
-function printSection(title: string, value: (y: RunYear, col: Col) => number) {
+function printSection(title: string, value: (y: RunYear, col: Col) => number | string) {
   console.log(`\n=== ${title} ===`);
   console.log(
     ['age', 'year'].map((h) => h.padStart(5)).join('') + COLS.map((c) => c.padStart(WIDTH)).join(''),
   );
   for (const y of years) {
-    console.log(
-      String(y.age).padStart(5) +
-        String(y.year).padStart(5) +
-        COLS.map((c) => value(y, c).toFixed(2).padStart(WIDTH)).join(''),
-    );
+    const cells = COLS.map((c) => {
+      const v = value(y, c);
+      return (typeof v === 'number' ? v.toFixed(2) : v).padStart(WIDTH);
+    });
+    console.log(String(y.age).padStart(5) + String(y.year).padStart(5) + cells.join(''));
   }
 }
 
+const realize = (fn: (y: RunYear, col: Col) => number | string) => (y: RunYear, col: Col) => {
+  const v = fn(y, col);
+  return typeof v === 'number' && col !== 'gap' ? toReal(v, yearsFromNow(y), a.inflation) : v;
+};
+
 printSection('NOMINAL ($)', nominalValue);
-printSection("REAL (today's $)", (y, col) => toReal(nominalValue(y, col), yearsFromNow(y), a.inflation));
-printSection("ATE (real, today's $)", (y, col) =>
-  toReal(ateNominalValue(y, col), yearsFromNow(y), a.inflation),
-);
+printSection("REAL (today's $)", realize(nominalValue));
+printSection("ATE (real, today's $)", realize(ateNominalValue));
+
+if (run) {
+  const drawYears = years.filter((y) => y.withdrawals !== undefined);
+  if (drawYears.length > 0) {
+    console.log('\n=== WITHDRAWALS (nominal, gross, per account) ===');
+    console.log(
+      ['age', 'year'].map((h) => h.padStart(5)).join('') +
+        [...ALL_ACCOUNTS, 'need', 'unmet'].map((c) => c.padStart(WIDTH)).join(''),
+    );
+    for (const y of drawYears) {
+      const cells = [...ALL_ACCOUNTS.map((id) => y.withdrawals?.[id] ?? 0), y.need ?? 0, y.unmet ?? 0];
+      console.log(
+        String(y.age).padStart(5) +
+          String(y.year).padStart(5) +
+          cells.map((v) => v.toFixed(2).padStart(WIDTH)).join(''),
+      );
+    }
+  }
+}
 
 const markers = years.flatMap((y) => y.events.map((e) => `  age ${e.age} [${e.kind}] ${e.label}`));
 if (markers.length > 0) {
   console.log('\n=== MARKERS & NOTES ===');
   for (const m of markers) console.log(m);
 }
+if (run && run.notes.length > 0) {
+  console.log('\n=== RUN NOTES ===');
+  for (const n of run.notes) console.log(`  ${n}`);
+}
+if (run) {
+  const s = run.summary;
+  console.log(
+    `\nSummary: drawdown at ${run.drawdownStartAge} · years retired ${s.yearsRetired} · ` +
+      `lifetime after-tax spending ${s.lifetimeAfterTaxSpending.toFixed(2)} · ` +
+      `terminal ATE ${s.terminalAte.toFixed(2)} · first gap ${s.firstGapAge ?? '—'} · ` +
+      `bridge funded ${s.bridgeFunded ? 'yes' : 'NO'} · cumulative tax ${s.cumulativeTax.toFixed(2)}`,
+  );
+}
 
 console.log(
-  `\nScenario "${scenario.name}" (${scenario.id}) · ${a.filers.length} filer(s) · ` +
-    `age ${startAge}→${a.horizonAge} · inflation ${(a.inflation * 100).toFixed(1)}% · ` +
-    `indexing ${a.indexWithInflation ? 'on' : 'off'} · growth only (no withdrawals)`,
+  `\nScenario "${scenario.name}" (${scenario.id})` +
+    (run && strategy ? ` × strategy "${strategy.name}" (${strategy.id})` : ' · growth only (no withdrawals)') +
+    ` · ${a.filers.length} filer(s) · age ${startAge}→${a.horizonAge} · ` +
+    `inflation ${(a.inflation * 100).toFixed(1)}% · indexing ${a.indexWithInflation ? 'on' : 'off'}`,
 );

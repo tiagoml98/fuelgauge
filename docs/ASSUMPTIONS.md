@@ -52,6 +52,9 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | M20 | Windfalls are nominal ("amount that lands, in that year's dollars"); one-time expenses are today's dollars, indexed — both labeled at the input | neutral (definitional) | Gate #12 |
 | M21 | Fees apply to invested accounts only, never cash | neutral (definitional) | Gate #8 |
 | M22 | Birth year is derived as currentYear − currentAge, not entered (M1 #4) | neutral, small | Affects only the RMD 73/75 boundary and the 60–63 catch-up window, by at most one year |
+| M23 | Retirement income exceeding that year's need is saved to cash (after simple-mode tax) | neutral | M3: surplus is never silently discarded |
+| M24 | Windfalls still land during drawdown years — only *contributions* are cut at the drawdown start | neutral | An inheritance at 70 is an event, not a contribution |
+| M25 | Under "spending = SWR × ATE, real return = SWR," the real balance decays slowly instead of holding exactly flat — a consequence of discrete start-of-year withdrawals (M2): ≈0.83× after the ~30 years the SWR tooltip is calibrated to | conservative (longevity) | The engine matches the closed form b′ = (b − spend×(1+i)) × (1+r_real) exactly |
 
 ## 3. Out of scope — never modeled (SPEC §11)
 

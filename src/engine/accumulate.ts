@@ -1,13 +1,20 @@
 /**
- * Accumulation engine (M2). Year-by-year from filer 1's current age to the
- * horizon, SPEC §4 timing: growth compounds on the start-of-year balance, then
- * contributions and windfalls land at end of year — which is exactly what
- * makes FV = P(1+r)^n + C((1+r)^n − 1)/r hold for the golden test.
+ * Accumulation engine (M2) and the shared sim core (M3 step 0). Year-by-year
+ * from filer 1's current age to the horizon, SPEC §4 timing: growth compounds
+ * on the start-of-year balance, then contributions and windfalls land at end
+ * of year — which is exactly what makes FV = P(1+r)^n + C((1+r)^n − 1)/r hold
+ * for the golden test.
  *
  * Age conventions (gate #1 + M2 decision #1): RunYear.age is filer 1's age at
  * the END of that year; the growth applied during that year uses the return
  * schedule's value AT that age (so the age-51 year is the first at the post-50
  * rate). Row t=0 is today's snapshot — no growth, no contributions.
+ *
+ * The SimContext + step functions (createSimContext / growYear /
+ * contributeYear / applyWindfalls / emitStreamMarkers / takeSnapshot) are
+ * engine-internal plumbing shared with run.ts (M3), which inserts withdrawals
+ * and rollovers between the same steps. They are exported for the engine only
+ * — the UI consumes simulateAccumulation / simulateRun.
  */
 
 import { ateByAccount, rollupBuckets } from './ate';
@@ -59,7 +66,7 @@ export function separationAge(
   return null;
 }
 
-interface FilerState {
+export interface FilerState {
   trad401k: number;
   tradIra: number;
   tradIraBasis: number;
@@ -74,6 +81,42 @@ interface FilerState {
   matchRothBasis: number;
 }
 
+export interface ResolvedFilerStreams {
+  inputs: FilerGrowthInputs;
+  salary: number[];
+  c401k: number[];
+  c401kRaw: number[];
+  ira: number[];
+  iraRaw: number[];
+  separation: number | null;
+  deductible: boolean;
+}
+
+export interface SimContext {
+  a: Assumptions;
+  g: GrowthScenario;
+  /** Filer 1's current age; model year t ↔ age startAge + t. */
+  startAge: number;
+  /** Number of simulated years (horizon − startAge). */
+  n: number;
+  returns: Record<AccountId, number[]>;
+  perFiler: ResolvedFilerStreams[];
+  hsaC: number[];
+  hsaRaw: number[];
+  taxableC: number[];
+  taxableRaw: number[];
+  cashC: number[];
+  cashRaw: number[];
+  filers: FilerState[];
+  taxable: number;
+  taxableBasis: number;
+  cash: number;
+  cumulativeTax: number;
+  /** One-time note keys already emitted. */
+  noted: Set<string>;
+  zeroed: AccountId[];
+}
+
 const INVESTED: ReadonlySet<AccountId> = new Set<AccountId>([
   'trad401k',
   'tradIra',
@@ -83,16 +126,19 @@ const INVESTED: ReadonlySet<AccountId> = new Set<AccountId>([
   'taxable',
 ]);
 
-export function simulateAccumulation(
-  a: Assumptions,
-  g: GrowthScenario,
-  stopAtAge?: number,
-): RunYear[] {
+export const rothIraTotal = (s: RothIraState): number =>
+  s.basis + s.earnings + s.conversions.reduce((sum, c) => sum + c.amount, 0);
+
+export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext {
   const startAge = a.filers[0].currentAge;
-  const endAge = a.horizonAge;
-  const n = endAge - startAge;
-  const idxOpts = { startAge, endAge, indexed: a.indexWithInflation, inflation: a.inflation };
-  const rawOpts = { startAge, endAge, indexed: false, inflation: 0 };
+  const n = a.horizonAge - startAge;
+  const idxOpts = {
+    startAge,
+    endAge: a.horizonAge,
+    indexed: a.indexWithInflation,
+    inflation: a.inflation,
+  };
+  const rawOpts = { startAge, endAge: a.horizonAge, indexed: false, inflation: 0 };
   const filerOpts = (f: number, indexed: boolean) => ({
     startAge: a.filers[f].currentAge,
     endAge: a.filers[f].currentAge + n,
@@ -100,7 +146,6 @@ export function simulateAccumulation(
     inflation: indexed ? a.inflation : 0,
   });
 
-  // --- resolve returns (rates, never indexed; filer-1 age domain) -----------
   // Precedence (M2 gate #6): a scenario override applies to ALL invested
   // accounts and beats per-account overrides; cash always uses its own return.
   const returnRows = (id: AccountId): ScheduleRow[] =>
@@ -113,7 +158,6 @@ export function simulateAccumulation(
     returns[id] = gross.map((r) => (INVESTED.has(id) ? r - a.fees : r)); // fees never touch cash (gate #8)
   }
 
-  // --- resolve contribution streams -----------------------------------------
   const perFiler = a.filers.map((_, f) => {
     const inputs: FilerGrowthInputs = g.perFiler[f];
     return {
@@ -128,379 +172,437 @@ export function simulateAccumulation(
         inputs.tradIraDeductible ?? !inputs.contrib401k.some((row) => row.value > 0), // gate #11 auto
     };
   });
-  const hsaC = resolveSchedule(g.hsaContrib, idxOpts);
-  const hsaRaw = resolveSchedule(g.hsaContrib, rawOpts);
-  const taxableC = resolveSchedule(g.taxableContrib, idxOpts);
-  const taxableRaw = resolveSchedule(g.taxableContrib, rawOpts);
-  const cashC = resolveSchedule(g.cashContrib, idxOpts);
-  const cashRaw = resolveSchedule(g.cashContrib, rawOpts);
 
-  // --- initial state ---------------------------------------------------------
-  const zeroed: string[] = [];
-  const filerState: FilerState[] = a.filers.map((_, f) => {
+  const zeroed: AccountId[] = ALL_ACCOUNTS.filter((id) => !a.include[id]);
+  const filers: FilerState[] = a.filers.map((_, f) => {
     const b = a.balances.perFiler[f];
+    const rothIra: RothIraState = a.include.rothIra
+      ? {
+          basis: b.rothIra.basis,
+          conversions: b.rothIra.conversions.map((c) => ({ ...c })),
+          earnings: b.rothIra.earnings,
+          firstFundedYear: b.rothIra.firstFundedYear,
+        }
+      : { basis: 0, conversions: [], earnings: 0, firstFundedYear: null };
+    // A starting balance IS funding the model sees — it anchors the 5-year clock.
+    if (rothIra.firstFundedYear === null && rothIraTotal(rothIra) > 0) {
+      rothIra.firstFundedYear = a.currentYear;
+    }
     return {
       trad401k: a.include.trad401k ? b.trad401k : 0,
       tradIra: a.include.tradIra ? b.tradIra : 0,
       tradIraBasis: a.include.tradIra ? b.tradIraBasis : 0,
       roth401k: a.include.roth401k ? b.roth401k : 0,
       roth401kBasis: a.include.roth401k ? b.roth401kBasis : 0,
-      rothIra: a.include.rothIra
-        ? {
-            basis: b.rothIra.basis,
-            conversions: b.rothIra.conversions.map((c) => ({ ...c })),
-            earnings: b.rothIra.earnings,
-            firstFundedYear: b.rothIra.firstFundedYear,
-          }
-        : { basis: 0, conversions: [], earnings: 0, firstFundedYear: null },
+      rothIra,
       hsa: a.include.hsa ? b.hsa : 0,
       matchTrad: 0, // starting balances count as fully vested
       matchRoth: 0,
       matchRothBasis: 0,
     };
   });
-  let taxable = a.include.taxable ? a.balances.taxable : 0;
-  let taxableBasis = a.include.taxable ? a.balances.taxableBasis : 0;
-  let cash = a.include.cash ? a.balances.cash : 0;
-  for (const id of ALL_ACCOUNTS) {
-    if (!a.include[id]) zeroed.push(id);
-  }
 
-  let cumulativeTax = 0;
-  const noted = new Set<string>(); // one-time notes (nondeductible, pro-rata, drops, HSA stop, forced Roth)
+  return {
+    a,
+    g,
+    startAge,
+    n,
+    returns,
+    perFiler,
+    hsaC: resolveSchedule(g.hsaContrib, idxOpts),
+    hsaRaw: resolveSchedule(g.hsaContrib, rawOpts),
+    taxableC: resolveSchedule(g.taxableContrib, idxOpts),
+    taxableRaw: resolveSchedule(g.taxableContrib, rawOpts),
+    cashC: resolveSchedule(g.cashContrib, idxOpts),
+    cashRaw: resolveSchedule(g.cashContrib, rawOpts),
+    filers,
+    taxable: a.include.taxable ? a.balances.taxable : 0,
+    taxableBasis: a.include.taxable ? a.balances.taxableBasis : 0,
+    cash: a.include.cash ? a.balances.cash : 0,
+    cumulativeTax: 0,
+    noted: new Set<string>(),
+    zeroed,
+  };
+}
 
-  const rothIraTotal = (s: RothIraState) =>
-    s.basis + s.earnings + s.conversions.reduce((sum, c) => sum + c.amount, 0);
+export function noteOnce(
+  ctx: SimContext,
+  key: string,
+  events: MarkerEvent[],
+  age: number,
+  label: string,
+): void {
+  if (ctx.noted.has(key)) return;
+  ctx.noted.add(key);
+  events.push({ kind: 'note', age, label });
+}
 
-  const snapshot = (age: number, year: number, taxPaid: number, events: MarkerEvent[]): RunYear => {
-    const sum = (pick: (s: FilerState) => number) =>
-      filerState.reduce((acc, s) => acc + pick(s), 0);
-    const rothConversions = filerState.flatMap((s) => s.rothIra.conversions.map((c) => ({ ...c })));
-    const accounts: Record<AccountId, BalanceSnapshot> = {
-      trad401k: { balance: sum((s) => s.trad401k), basis: 0 },
-      tradIra: { balance: sum((s) => s.tradIra), basis: sum((s) => s.tradIraBasis) },
-      roth401k: {
-        balance: sum((s) => s.roth401k),
-        basis: 0,
-        rothBasis: sum((s) => s.roth401kBasis),
-        rothEarnings: sum((s) => s.roth401k - s.roth401kBasis),
-      },
-      rothIra: {
-        balance: sum((s) => rothIraTotal(s.rothIra)),
-        basis: 0,
-        rothBasis: sum((s) => s.rothIra.basis),
-        rothConversions,
-        rothEarnings: sum((s) => s.rothIra.earnings),
-      },
-      hsa: { balance: sum((s) => s.hsa), basis: 0 },
-      taxable: { balance: taxable, basis: taxableBasis },
-      cash: { balance: cash, basis: cash },
-    };
-    const ate = ateByAccount(accounts, a);
-    const buckets = rollupBuckets(accounts, ate);
-    const total = ALL_ACCOUNTS.reduce((acc, id) => acc + accounts[id].balance, 0);
-    const totalAte = ALL_ACCOUNTS.reduce((acc, id) => acc + ate[id], 0);
-    return {
+const fmtMoney = (v: number) => Math.round(v).toLocaleString('en-US');
+
+// Spec: "capped at limits" means cap AND warn — emitted every capped year.
+function capNote(
+  events: MarkerEvent[],
+  age: number,
+  label: string,
+  requested: number,
+  capped: number,
+): void {
+  if (requested > capped + 1e-9) {
+    events.push({
+      kind: 'note',
       age,
-      year,
-      accounts,
-      buckets,
-      total,
-      totalAte,
-      accessible: totalAte, // placeholder until M3 computes access
-      locked: 0,
-      taxPaidThisYear: taxPaid,
-      cumulativeTax,
-      gap: false,
-      events,
-    };
-  };
-
-  const noteOnce = (key: string, events: MarkerEvent[], age: number, label: string) => {
-    if (noted.has(key)) return;
-    noted.add(key);
-    events.push({ kind: 'note', age, label });
-  };
-
-  const fmtMoney = (v: number) => Math.round(v).toLocaleString('en-US');
-  // Spec: "capped at limits" means cap AND warn — emitted every capped year.
-  const capNote = (events: MarkerEvent[], age: number, label: string, requested: number, capped: number) => {
-    if (requested > capped + 1e-9) {
-      events.push({
-        kind: 'note',
-        age,
-        label: `${label} requested ${fmtMoney(requested)}, capped at ${fmtMoney(capped)}`,
-      });
-    }
-  };
-
-  // --- year 0: today ----------------------------------------------------------
-  const year0Events: MarkerEvent[] = [];
-  for (const id of zeroed) {
-    year0Events.push({ kind: 'note', age: startAge, label: `${id} excluded — ignored entirely` });
+      label: `${label} requested ${fmtMoney(requested)}, capped at ${fmtMoney(capped)}`,
+    });
   }
-  const years: RunYear[] = [snapshot(startAge, a.currentYear, 0, year0Events)];
+}
 
-  // --- main loop ---------------------------------------------------------------
-  for (let t = 1; t <= n; t++) {
-    const age = startAge + t;
+/** Growth on start-of-year balances. Returns the tax paid (drag + cash interest). */
+export function growYear(
+  ctx: SimContext,
+  t: number,
+  phase: 'accumulation' | 'drawdown',
+): number {
+  const { a, returns } = ctx;
+  let taxPaid = 0;
+  for (const s of ctx.filers) {
+    s.trad401k *= 1 + returns.trad401k[t];
+    s.matchTrad *= 1 + returns.trad401k[t];
+    s.roth401k *= 1 + returns.roth401k[t];
+    s.matchRoth *= 1 + returns.roth401k[t];
+    s.tradIra *= 1 + returns.tradIra[t];
+    s.hsa *= 1 + returns.hsa[t];
+    s.rothIra.earnings += rothIraTotal(s.rothIra) * returns.rothIra[t];
+  }
+  if (a.include.taxable) {
+    const drag = dividendDrag(ctx.taxable, a.dividendYield, a.dividendTaxRate);
+    // Reinvested after-tax dividends are new cost basis (M2 gate bug fix):
+    // basis += start-of-year balance × yield × (1 − dividend tax rate)
+    ctx.taxableBasis += ctx.taxable * a.dividendYield * (1 - a.dividendTaxRate);
+    ctx.taxable = ctx.taxable * (1 + returns.taxable[t]) - drag;
+    taxPaid += drag;
+  }
+  if (a.include.cash) {
+    const interest = ctx.cash * returns.cash[t];
+    const tax = cashInterestTax(interest, phase, a);
+    ctx.cash += interest - tax;
+    taxPaid += tax;
+  }
+  return taxPaid;
+}
+
+/** End-of-year contributions: 401k/IRA/HSA/taxable/cash, match, vesting drop. */
+export function contributeYear(ctx: SimContext, t: number, events: MarkerEvent[]): void {
+  const { a } = ctx;
+  const age = ctx.startAge + t;
+  const limitsY = resolveLimits(a.limits, t, a.indexWithInflation, a.inflation);
+  const filerAges = a.filers.map((fl) => fl.currentAge + t);
+
+  for (let f = 0; f < ctx.filers.length; f++) {
+    const s = ctx.filers[f];
+    const p = ctx.perFiler[f];
+    const ageF = filerAges[f];
+
+    // 401k under one shared deferral limit
+    let base401kUsed = 0;
+    let deferralTotal = 0; // incl. Roth side and catch-up — the match formula's input (gate #7)
+    if (p.c401k[t] > 0) {
+      if (!a.include.trad401k && !a.include.roth401k) {
+        noteOnce(ctx, `drop401k${f}`, events, age, `401k contributions (filer ${f + 1}) dropped — account excluded`);
+      } else {
+        const capped = capFiler401k(
+          p.c401k[t],
+          ageF,
+          p.salary[t],
+          p.inputs.split401kRothPct,
+          limitsY,
+        );
+        s.trad401k += capped.trad;
+        s.roth401k += capped.roth;
+        s.roth401kBasis += capped.roth;
+        deferralTotal = capped.trad + capped.roth;
+        base401kUsed = deferralTotal - capped.catchUpUsed;
+        capNote(events, age, `401k (filer ${f + 1})`, p.c401k[t], deferralTotal);
+        if (capped.forcedRothCatchUp) {
+          noteOnce(ctx, `forcedRoth${f}`, events, age, `catch-up forced to Roth 401k (filer ${f + 1}) — salary above threshold`);
+          if (!ctx.noted.has(`forcedRothEvent${f}`)) {
+            ctx.noted.add(`forcedRothEvent${f}`);
+            events.push({ kind: 'rothCatchUpForced', age, label: `Roth catch-up forced (filer ${f + 1})` });
+          }
+        }
+      }
+    }
+
+    // IRA under one shared limit
+    if (p.ira[t] > 0) {
+      const capped = capFilerIra(p.ira[t], ageF, limitsY);
+      capNote(events, age, `IRA (filer ${f + 1})`, p.ira[t], capped);
+      if (p.inputs.backdoor) {
+        if (!a.include.rothIra) {
+          noteOnce(ctx, `dropIraR${f}`, events, age, `backdoor IRA (filer ${f + 1}) dropped — Roth IRA excluded`);
+        } else {
+          s.rothIra.conversions.push({ year: a.currentYear + t, amount: capped, taxablePortion: 0 });
+          s.rothIra.firstFundedYear ??= a.currentYear + t;
+          if (s.tradIra > 0) {
+            noteOnce(ctx, `proRata${f}`, events, age, `backdoor with a Traditional IRA balance (filer ${f + 1}) — pro-rata rule applies in reality, not modeled (T8)`);
+          }
+        }
+      } else {
+        const rothPart = capped * p.inputs.splitIraRothPct;
+        const tradPart = capped - rothPart;
+        if (rothPart > 0) {
+          if (!a.include.rothIra) {
+            noteOnce(ctx, `dropIraR${f}`, events, age, `Roth IRA contributions (filer ${f + 1}) dropped — account excluded`);
+          } else {
+            s.rothIra.basis += rothPart;
+            s.rothIra.firstFundedYear ??= a.currentYear + t;
+          }
+        }
+        if (tradPart > 0) {
+          if (!a.include.tradIra) {
+            noteOnce(ctx, `dropIraT${f}`, events, age, `Traditional IRA contributions (filer ${f + 1}) dropped — account excluded`);
+          } else {
+            s.tradIra += tradPart;
+            if (!p.deductible) {
+              s.tradIraBasis += tradPart;
+              noteOnce(ctx, `nondeduct${f}`, events, age, `Traditional IRA contributions are nondeductible (filer ${f + 1}) — tracked as basis; consider the backdoor toggle`);
+            }
+          }
+        }
+      }
+    }
+
+    // Match (gate #7), 415(c)-clamped, into its destination's sub-balance
+    const m = p.inputs.match;
+    const flatIndexed = m.flatAmount * (a.indexWithInflation ? Math.pow(1 + a.inflation, t) : 1);
+    const raw = matchAmount(m, deferralTotal, p.salary[t], flatIndexed);
+    const allowed = clamp415c(base401kUsed, raw, 0, limitsY);
+    if (allowed > 0 && a.include[m.destination]) {
+      if (m.destination === 'trad401k') {
+        s.trad401k += allowed;
+        s.matchTrad += allowed;
+      } else {
+        // Employer Roth match is taxed as income when made ⇒ it IS contribution
+        // basis; on rollover it becomes regular Roth IRA basis (M2 gate #5).
+        s.roth401k += allowed;
+        s.roth401kBasis += allowed;
+        s.matchRoth += allowed;
+        s.matchRothBasis += allowed;
+      }
+    }
+
+    // Separation: drop the unvested fraction at the last working age
+    if (p.separation !== null && ageF === p.separation && m.vestingPct < 1) {
+      const dropTrad = Math.min(s.matchTrad * (1 - m.vestingPct), s.trad401k);
+      const dropRoth = Math.min(s.matchRoth * (1 - m.vestingPct), s.roth401k);
+      const dropRothBasis = Math.min(s.matchRothBasis * (1 - m.vestingPct), s.roth401kBasis);
+      if (dropTrad + dropRoth > 0) {
+        s.trad401k -= dropTrad;
+        s.matchTrad -= dropTrad;
+        s.roth401k -= dropRoth;
+        s.matchRoth -= dropRoth;
+        s.roth401kBasis -= dropRothBasis;
+        s.matchRothBasis -= dropRothBasis;
+        events.push({
+          kind: 'note',
+          age,
+          label: `unvested match dropped at separation (filer ${f + 1}): ${Math.round(dropTrad + dropRoth)}`,
+        });
+      }
+    }
+  }
+
+  // HSA (household schedule → youngest filer under 65; M2 decision #2)
+  if (ctx.hsaC[t] > 0) {
+    if (!a.include.hsa) {
+      noteOnce(ctx, 'dropHsa', events, age, 'HSA contributions dropped — account excluded');
+    } else {
+      const capped = capHouseholdHsa(ctx.hsaC[t], filerAges, a.hsaCoverage, limitsY);
+      if (capped > 0) {
+        capNote(events, age, 'HSA', ctx.hsaC[t], capped);
+        const eligible = filerAges
+          .map((av, i) => ({ age: av, i }))
+          .filter((x) => x.age < HSA_CONTRIBUTION_STOP_AGE)
+          .sort((x, y) => x.age - y.age);
+        ctx.filers[eligible[0].i].hsa += capped;
+      } else {
+        noteOnce(ctx, 'hsaStop', events, age, 'HSA contributions auto-stop at 65');
+      }
+    }
+  }
+
+  // Household taxable + cash
+  if (ctx.taxableC[t] > 0) {
+    if (!a.include.taxable) {
+      noteOnce(ctx, 'dropTaxable', events, age, 'taxable contributions dropped — account excluded');
+    } else {
+      ctx.taxable += ctx.taxableC[t];
+      ctx.taxableBasis += ctx.taxableC[t];
+    }
+  }
+  if (ctx.cashC[t] > 0) {
+    if (!a.include.cash) {
+      noteOnce(ctx, 'dropCash', events, age, 'cash contributions dropped — account excluded');
+    } else {
+      ctx.cash += ctx.cashC[t];
+    }
+  }
+}
+
+/** Windfalls — nominal, land at face (gate #12); per-filer targets go to w.filer (default filer 1). */
+export function applyWindfalls(ctx: SimContext, t: number, events: MarkerEvent[]): void {
+  const { a } = ctx;
+  const age = ctx.startAge + t;
+  for (const w of ctx.g.windfalls) {
+    if (w.age !== age) continue;
+    if (!a.include[w.target]) {
+      noteOnce(ctx, `dropWindfall${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — ${w.target} excluded`);
+      continue;
+    }
+    const s = ctx.filers[w.filer ?? 0];
+    if (!s) {
+      noteOnce(ctx, `dropWindfallF${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — no filer ${(w.filer ?? 0) + 1}`);
+      continue;
+    }
+    switch (w.target) {
+      case 'taxable':
+        ctx.taxable += w.amount;
+        ctx.taxableBasis += w.amount;
+        break;
+      case 'cash':
+        ctx.cash += w.amount;
+        break;
+      case 'trad401k':
+        s.trad401k += w.amount;
+        break;
+      case 'tradIra':
+        s.tradIra += w.amount;
+        break;
+      case 'roth401k':
+        s.roth401k += w.amount;
+        s.roth401kBasis += w.amount;
+        break;
+      case 'rothIra':
+        s.rothIra.basis += w.amount;
+        s.rothIra.firstFundedYear ??= a.currentYear + t;
+        break;
+      case 'hsa':
+        s.hsa += w.amount;
+        break;
+    }
+    events.push({ kind: 'windfall', age, label: w.label });
+  }
+}
+
+/** Contribution stop/reduce/resume/increase/start markers (SPEC §3, M2 gate #2). */
+export function emitStreamMarkers(ctx: SimContext, t: number, events: MarkerEvent[]): void {
+  const age = ctx.startAge + t;
+  const streams: Array<[string, number[]]> = [
+    ...ctx.perFiler.map((p, f): [string, number[]] => [`401k (filer ${f + 1})`, p.c401kRaw]),
+    ...ctx.perFiler.map((p, f): [string, number[]] => [`IRA (filer ${f + 1})`, p.iraRaw]),
+    ['HSA', ctx.hsaRaw],
+    ['taxable', ctx.taxableRaw],
+    ['cash', ctx.cashRaw],
+  ];
+  for (const [label, arr] of streams) {
+    if (arr[t] !== arr[t - 1]) {
+      const verb =
+        arr[t] === 0
+          ? 'stop'
+          : arr[t] < arr[t - 1]
+            ? 'reduced'
+            : arr[t - 1] > 0
+              ? 'increased'
+              : arr.slice(0, t).some((v) => v > 0)
+                ? 'resume'
+                : 'start';
+      events.push({ kind: 'contributionChange', age, label: `${label} contributions ${verb}` });
+    }
+  }
+}
+
+/** Merged display snapshot (M1 #1: per-filer sub-balances summed). */
+export function takeSnapshot(
+  ctx: SimContext,
+  age: number,
+  year: number,
+  taxPaid: number,
+  events: MarkerEvent[],
+): RunYear {
+  const { a } = ctx;
+  const sum = (pick: (s: FilerState) => number) =>
+    ctx.filers.reduce((acc, s) => acc + pick(s), 0);
+  const rothConversions = ctx.filers.flatMap((s) => s.rothIra.conversions.map((c) => ({ ...c })));
+  const accounts: Record<AccountId, BalanceSnapshot> = {
+    trad401k: { balance: sum((s) => s.trad401k), basis: 0 },
+    tradIra: { balance: sum((s) => s.tradIra), basis: sum((s) => s.tradIraBasis) },
+    roth401k: {
+      balance: sum((s) => s.roth401k),
+      basis: 0,
+      rothBasis: sum((s) => s.roth401kBasis),
+      rothEarnings: sum((s) => s.roth401k - s.roth401kBasis),
+    },
+    rothIra: {
+      balance: sum((s) => rothIraTotal(s.rothIra)),
+      basis: 0,
+      rothBasis: sum((s) => s.rothIra.basis),
+      rothConversions,
+      rothEarnings: sum((s) => s.rothIra.earnings),
+    },
+    hsa: { balance: sum((s) => s.hsa), basis: 0 },
+    taxable: { balance: ctx.taxable, basis: ctx.taxableBasis },
+    cash: { balance: ctx.cash, basis: ctx.cash },
+  };
+  const ate = ateByAccount(accounts, a);
+  const buckets = rollupBuckets(accounts, ate);
+  const total = ALL_ACCOUNTS.reduce((acc, id) => acc + accounts[id].balance, 0);
+  const totalAte = ALL_ACCOUNTS.reduce((acc, id) => acc + ate[id], 0);
+  return {
+    age,
+    year,
+    accounts,
+    buckets,
+    total,
+    totalAte,
+    accessible: totalAte, // run.ts overwrites with the access-aware value (M3)
+    locked: 0,
+    taxPaidThisYear: taxPaid,
+    cumulativeTax: ctx.cumulativeTax,
+    gap: false,
+    events,
+  };
+}
+
+export function yearZeroEvents(ctx: SimContext): MarkerEvent[] {
+  return ctx.zeroed.map((id) => ({
+    kind: 'note' as const,
+    age: ctx.startAge,
+    label: `${id} excluded — ignored entirely`,
+  }));
+}
+
+export function simulateAccumulation(
+  a: Assumptions,
+  g: GrowthScenario,
+  stopAtAge?: number,
+): RunYear[] {
+  const ctx = createSimContext(a, g);
+  const years: RunYear[] = [
+    takeSnapshot(ctx, ctx.startAge, a.currentYear, 0, yearZeroEvents(ctx)),
+  ];
+  for (let t = 1; t <= ctx.n; t++) {
+    const age = ctx.startAge + t;
     const events: MarkerEvent[] = [];
-    let taxPaid = 0;
-
-    // 1. Growth on start-of-year balances
-    for (let f = 0; f < filerState.length; f++) {
-      const s = filerState[f];
-      s.trad401k *= 1 + returns.trad401k[t];
-      s.matchTrad *= 1 + returns.trad401k[t];
-      s.roth401k *= 1 + returns.roth401k[t];
-      s.matchRoth *= 1 + returns.roth401k[t];
-      s.tradIra *= 1 + returns.tradIra[t];
-      s.hsa *= 1 + returns.hsa[t];
-      s.rothIra.earnings += rothIraTotal(s.rothIra) * returns.rothIra[t];
-    }
-    if (a.include.taxable) {
-      const drag = dividendDrag(taxable, a.dividendYield, a.dividendTaxRate);
-      // Reinvested after-tax dividends are new cost basis (M2 gate bug fix):
-      // basis += start-of-year balance × yield × (1 − dividend tax rate)
-      taxableBasis += taxable * a.dividendYield * (1 - a.dividendTaxRate);
-      taxable = taxable * (1 + returns.taxable[t]) - drag;
-      taxPaid += drag;
-    }
-    if (a.include.cash) {
-      const interest = cash * returns.cash[t];
-      const tax = cashInterestTax(interest, 'accumulation', a);
-      cash += interest - tax;
-      taxPaid += tax;
-    }
-
-    // 2. Contributions (cut at the strategy's drawdown start — M3 passes stopAtAge)
+    let taxPaid = growYear(ctx, t, 'accumulation');
     const contributing = stopAtAge === undefined || age < stopAtAge;
     if (contributing) {
-      const limitsY = resolveLimits(a.limits, t, a.indexWithInflation, a.inflation);
-      const filerAges = a.filers.map((fl) => fl.currentAge + t);
-
-      for (let f = 0; f < filerState.length; f++) {
-        const s = filerState[f];
-        const p = perFiler[f];
-        const ageF = filerAges[f];
-
-        // 401k under one shared deferral limit
-        let base401kUsed = 0;
-        let deferralTotal = 0; // incl. Roth side and catch-up — the match formula's input (gate #7)
-        if (p.c401k[t] > 0) {
-          if (!a.include.trad401k && !a.include.roth401k) {
-            noteOnce(`drop401k${f}`, events, age, `401k contributions (filer ${f + 1}) dropped — account excluded`);
-          } else {
-            const capped = capFiler401k(
-              p.c401k[t],
-              ageF,
-              p.salary[t],
-              p.inputs.split401kRothPct,
-              limitsY,
-            );
-            s.trad401k += capped.trad;
-            s.roth401k += capped.roth;
-            s.roth401kBasis += capped.roth;
-            deferralTotal = capped.trad + capped.roth;
-            base401kUsed = deferralTotal - capped.catchUpUsed;
-            capNote(events, age, `401k (filer ${f + 1})`, p.c401k[t], deferralTotal);
-            if (capped.forcedRothCatchUp) {
-              noteOnce(`forcedRoth${f}`, events, age, `catch-up forced to Roth 401k (filer ${f + 1}) — salary above threshold`);
-              if (!noted.has(`forcedRothEvent${f}`)) {
-                noted.add(`forcedRothEvent${f}`);
-                events.push({ kind: 'rothCatchUpForced', age, label: `Roth catch-up forced (filer ${f + 1})` });
-              }
-            }
-          }
-        }
-
-        // IRA under one shared limit
-        if (p.ira[t] > 0) {
-          const capped = capFilerIra(p.ira[t], ageF, limitsY);
-          capNote(events, age, `IRA (filer ${f + 1})`, p.ira[t], capped);
-          if (p.inputs.backdoor) {
-            if (!a.include.rothIra) {
-              noteOnce(`dropIraR${f}`, events, age, `backdoor IRA (filer ${f + 1}) dropped — Roth IRA excluded`);
-            } else {
-              s.rothIra.conversions.push({ year: a.currentYear + t, amount: capped, taxablePortion: 0 });
-              s.rothIra.firstFundedYear ??= a.currentYear + t;
-              if (s.tradIra > 0) {
-                noteOnce(`proRata${f}`, events, age, `backdoor with a Traditional IRA balance (filer ${f + 1}) — pro-rata rule applies in reality, not modeled (T8)`);
-              }
-            }
-          } else {
-            const rothPart = capped * p.inputs.splitIraRothPct;
-            const tradPart = capped - rothPart;
-            if (rothPart > 0) {
-              if (!a.include.rothIra) {
-                noteOnce(`dropIraR${f}`, events, age, `Roth IRA contributions (filer ${f + 1}) dropped — account excluded`);
-              } else {
-                s.rothIra.basis += rothPart;
-                s.rothIra.firstFundedYear ??= a.currentYear + t;
-              }
-            }
-            if (tradPart > 0) {
-              if (!a.include.tradIra) {
-                noteOnce(`dropIraT${f}`, events, age, `Traditional IRA contributions (filer ${f + 1}) dropped — account excluded`);
-              } else {
-                s.tradIra += tradPart;
-                if (!p.deductible) {
-                  s.tradIraBasis += tradPart;
-                  noteOnce(`nondeduct${f}`, events, age, `Traditional IRA contributions are nondeductible (filer ${f + 1}) — tracked as basis; consider the backdoor toggle`);
-                }
-              }
-            }
-          }
-        }
-
-        // Match (gate #7), 415(c)-clamped, into its destination's sub-balance
-        const m = p.inputs.match;
-        const flatIndexed =
-          m.flatAmount * (a.indexWithInflation ? Math.pow(1 + a.inflation, t) : 1);
-        const raw = matchAmount(m, deferralTotal, p.salary[t], flatIndexed);
-        const allowed = clamp415c(base401kUsed, raw, 0, limitsY);
-        if (allowed > 0 && a.include[m.destination]) {
-          if (m.destination === 'trad401k') {
-            s.trad401k += allowed;
-            s.matchTrad += allowed;
-          } else {
-            // Employer Roth match is taxed as income when made ⇒ it IS contribution
-            // basis; on rollover it becomes regular Roth IRA basis (M2 gate #5).
-            s.roth401k += allowed;
-            s.roth401kBasis += allowed;
-            s.matchRoth += allowed;
-            s.matchRothBasis += allowed;
-          }
-        }
-
-        // Separation: drop the unvested fraction at the last working age
-        if (p.separation !== null && ageF === p.separation && m.vestingPct < 1) {
-          const dropTrad = s.matchTrad * (1 - m.vestingPct);
-          const dropRoth = s.matchRoth * (1 - m.vestingPct);
-          const dropRothBasis = s.matchRothBasis * (1 - m.vestingPct);
-          if (dropTrad + dropRoth > 0) {
-            s.trad401k -= dropTrad;
-            s.matchTrad -= dropTrad;
-            s.roth401k -= dropRoth;
-            s.matchRoth -= dropRoth;
-            s.roth401kBasis -= dropRothBasis;
-            s.matchRothBasis -= dropRothBasis;
-            events.push({
-              kind: 'note',
-              age,
-              label: `unvested match dropped at separation (filer ${f + 1}): ${Math.round(dropTrad + dropRoth)}`,
-            });
-          }
-        }
-      }
-
-      // HSA (household schedule → youngest filer under 65; M2 decision #2)
-      if (hsaC[t] > 0) {
-        if (!a.include.hsa) {
-          noteOnce('dropHsa', events, age, 'HSA contributions dropped — account excluded');
-        } else {
-          const capped = capHouseholdHsa(hsaC[t], filerAges, a.hsaCoverage, limitsY);
-          if (capped > 0) {
-            capNote(events, age, 'HSA', hsaC[t], capped);
-            const eligible = filerAges
-              .map((av, i) => ({ age: av, i }))
-              .filter((x) => x.age < HSA_CONTRIBUTION_STOP_AGE)
-              .sort((x, y) => x.age - y.age);
-            filerState[eligible[0].i].hsa += capped;
-          } else {
-            noteOnce('hsaStop', events, age, 'HSA contributions auto-stop at 65');
-          }
-        }
-      }
-
-      // Household taxable + cash
-      if (taxableC[t] > 0) {
-        if (!a.include.taxable) {
-          noteOnce('dropTaxable', events, age, 'taxable contributions dropped — account excluded');
-        } else {
-          taxable += taxableC[t];
-          taxableBasis += taxableC[t];
-        }
-      }
-      if (cashC[t] > 0) {
-        if (!a.include.cash) {
-          noteOnce('dropCash', events, age, 'cash contributions dropped — account excluded');
-        } else {
-          cash += cashC[t];
-        }
-      }
+      contributeYear(ctx, t, events);
     }
-
-    // 3. Windfalls — nominal, land at face (gate #12); per-filer targets go to w.filer (default filer 1)
-    for (const w of g.windfalls) {
-      if (w.age !== age) continue;
-      if (!a.include[w.target]) {
-        noteOnce(`dropWindfall${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — ${w.target} excluded`);
-        continue;
-      }
-      const s = filerState[w.filer ?? 0];
-      if (!s) {
-        noteOnce(`dropWindfallF${w.age}${w.target}`, events, age, `windfall "${w.label}" dropped — no filer ${(w.filer ?? 0) + 1}`);
-        continue;
-      }
-      switch (w.target) {
-        case 'taxable':
-          taxable += w.amount;
-          taxableBasis += w.amount;
-          break;
-        case 'cash':
-          cash += w.amount;
-          break;
-        case 'trad401k':
-          s.trad401k += w.amount;
-          break;
-        case 'tradIra':
-          s.tradIra += w.amount;
-          break;
-        case 'roth401k':
-          s.roth401k += w.amount;
-          s.roth401kBasis += w.amount;
-          break;
-        case 'rothIra':
-          s.rothIra.basis += w.amount;
-          s.rothIra.firstFundedYear ??= a.currentYear + t;
-          break;
-        case 'hsa':
-          s.hsa += w.amount;
-          break;
-      }
-      events.push({ kind: 'windfall', age, label: w.label });
-    }
-
-    // 4. Contribution stop/reduce markers (SPEC §3) — detected on unindexed streams
+    applyWindfalls(ctx, t, events);
     if (contributing) {
-      const streams: Array<[string, number[]]> = [
-        ...perFiler.map((p, f): [string, number[]] => [`401k (filer ${f + 1})`, p.c401kRaw]),
-        ...perFiler.map((p, f): [string, number[]] => [`IRA (filer ${f + 1})`, p.iraRaw]),
-        ['HSA', hsaRaw],
-        ['taxable', taxableRaw],
-        ['cash', cashRaw],
-      ];
-      for (const [label, arr] of streams) {
-        if (arr[t] !== arr[t - 1]) {
-          const verb =
-            arr[t] === 0
-              ? 'stop'
-              : arr[t] < arr[t - 1]
-                ? 'reduced'
-                : arr[t - 1] > 0
-                  ? 'increased'
-                  : arr.slice(0, t).some((v) => v > 0)
-                    ? 'resume'
-                    : 'start';
-          events.push({ kind: 'contributionChange', age, label: `${label} contributions ${verb}` });
-        }
-      }
+      emitStreamMarkers(ctx, t, events);
     }
-
-    cumulativeTax += taxPaid;
-    years.push(snapshot(age, a.currentYear + t, taxPaid, events));
+    ctx.cumulativeTax += taxPaid;
+    years.push(takeSnapshot(ctx, age, a.currentYear + t, taxPaid, events));
   }
-
   return years;
 }

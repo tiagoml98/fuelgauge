@@ -184,6 +184,7 @@ export function simulateRun(
     const events: MarkerEvent[] = [];
     let taxPaid = 0;
     let need: number | undefined;
+    let grossNeedOut: number | undefined;
     let unmet: number | undefined;
     let withdrawals: RunYear['withdrawals'];
     let gap = false;
@@ -252,6 +253,7 @@ export function simulateRun(
       const result = withdrawYear(ctx, t, netNeed, w.order, access);
       taxPaid += result.taxPaid;
       need = netNeed;
+      grossNeedOut = grossNeed;
       unmet = result.unmet;
       withdrawals = result.withdrawals;
       gap = result.gap;
@@ -295,6 +297,7 @@ export function simulateRun(
     ctx.cumulativeTax += taxPaid;
     const row = takeSnapshot(ctx, age, year, taxPaid, events);
     row.need = need;
+    row.grossNeed = grossNeedOut;
     row.unmet = unmet;
     row.withdrawals = withdrawals;
     row.gap = gap;

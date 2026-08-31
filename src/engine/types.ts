@@ -377,6 +377,8 @@ export interface RunYear {
   cumulativeTax: number;
   /** Drawdown years only. need = net portfolio need after income offset (M3). */
   need?: number;
+  /** Spending + one-time expenses before the income offset (M5.5 — lets the UI lens lifetime spending). */
+  grossNeed?: number;
   /** Gross per-account draws (incl. tax gross-up). */
   withdrawals?: Partial<Record<AccountId, number>>;
   /** Unfunded remainder of need — 0 when fully funded; > 0 ⇔ gap. */

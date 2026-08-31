@@ -294,6 +294,7 @@ describe('retirement income rows (gate #9)', () => {
     });
     const y = rowAt(simulateRun(base(), makeG(), w).years, 66);
     const netNeed = 40_000 - 30_000 * 0.88;
+    expect(y.grossNeed).toBeCloseTo(40_000, 6); // pre-offset spending (M5.5 lens support)
     expect(y.need).toBeCloseTo(netNeed, 6);
     expect(y.withdrawals?.tradIra).toBeCloseTo(netNeed / 0.88, 4);
     expect(y.taxPaidThisYear).toBeCloseTo(30_000 * 0.12 + (netNeed / 0.88) * 0.12, 4);

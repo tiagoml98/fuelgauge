@@ -21,9 +21,19 @@ const fmt = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 0 
 
 test('locked case: red gap years in the bridge, gap rows in the table, rollover at 60', async ({ page }) => {
   await loadState(page, drawdownState('locked'));
-  // Bridge: the gate's red-gap-years deliverable, in readable form
+  // Bridge: the gate's red-gap-years deliverable, in readable form.
+  // M5.5 item 1: today's-$ mode shows REAL sums; nominal sums only in nominal mode.
   await expect(page.getByTestId('bridge-summary')).toContainText('15 gap years ✗');
+  await expect(page.getByTestId('bridge-summary')).toContainText('$40,000 of $640,000 funded');
+  await expect(page.getByText("spend at start $40,000 · at access $40,000 (today's $)")).toBeVisible();
+  await expect(page.getByText("today's $, funded years only")).toBeVisible(); // tile subtitle states the lens
+  await page.getByRole('tab', { name: 'nominal' }).click();
   await expect(page.getByTestId('bridge-summary')).toContainText('$62,319 of $806,275 funded');
+  await expect(page.getByText('nominal, funded years only')).toBeVisible();
+  // M5.5 item 2: funded-through tile + honest years-retired subtitle
+  await expect(page.getByText('gaps from the start')).toBeVisible();
+  await expect(page.getByText('planned span from 45 — not the funded span')).toBeVisible();
+  await page.getByRole('tab', { name: "today's $" }).click();
   // Gap rows are flagged in the balance table (yearly off — gap rows still forced in)
   await expect(page.locator('[data-gap-age="45"]')).toContainText('GAP');
   await expect(page.locator('[data-gap-age="59"]')).toContainText('GAP');

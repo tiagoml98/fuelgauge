@@ -19,6 +19,7 @@ import { BridgeVisualizer } from './BridgeVisualizer';
 import { MilestonesPanel, RateArbitragePanel } from './DrawdownPanels';
 import { Lens } from './HeroCard';
 import { fmtMoney0, fmtMoneyM } from './inputs';
+import { runTiles } from './lens';
 import { StrategyEditor } from './StrategyEditor';
 import { StrategyMenu } from './StrategyMenu';
 
@@ -56,6 +57,10 @@ export function DrawdownTab() {
   const lens = (key: 'real' | 'ate' | 'byBuckets') => (v: boolean) =>
     dispatch({ type: 'patchDisplay', patch: { [key]: v } });
   const hasSpending = strategyHasSpending(strategy);
+  const tiles = useMemo(
+    () => (run ? runTiles(run, a, d.real) : null),
+    [run, a, d.real],
+  )!;
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full">
@@ -101,26 +106,43 @@ export function DrawdownTab() {
 
           {run && hasSpending && (
             <>
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                 <Tile
                   label="Lifetime after-tax spending"
-                  value={fmtMoneyM(run.summary.lifetimeAfterTaxSpending)}
-                  hint="nominal, funded years only"
+                  value={fmtMoneyM(tiles.lifetimeAfterTaxSpending)}
+                  hint={`${tiles.lensLabel}, funded years only`}
                 />
                 <Tile
                   label="Terminal ATE"
-                  value={fmtMoneyM(run.summary.terminalAte)}
-                  hint={`nominal at ${a.horizonAge}`}
+                  value={fmtMoneyM(tiles.terminalAte)}
+                  hint={`${tiles.lensLabel} at ${a.horizonAge}`}
+                />
+                <Tile
+                  label="Funded through"
+                  value={
+                    tiles.fundedThrough === 'horizon'
+                      ? `${a.horizonAge} ✓`
+                      : tiles.fundedThrough === null
+                        ? '— ✗'
+                        : `${tiles.fundedThrough}`
+                  }
+                  hint={
+                    tiles.fundedThrough === 'horizon'
+                      ? 'no gap years'
+                      : tiles.fundedThrough === null
+                        ? 'gaps from the start'
+                        : `money runs out at ${run.summary.firstGapAge}`
+                  }
                 />
                 <Tile
                   label="Years retired"
                   value={String(run.summary.yearsRetired)}
-                  hint={`drawdown at ${run.drawdownStartAge}`}
+                  hint={`planned span from ${run.drawdownStartAge} — not the funded span`}
                 />
                 <Tile
                   label="Cumulative tax"
-                  value={fmtMoney0(run.summary.cumulativeTax)}
-                  hint="drag, income & withdrawal tax"
+                  value={fmtMoney0(tiles.cumulativeTax)}
+                  hint={`${tiles.lensLabel} — drag, income & withdrawal tax`}
                 />
               </div>
 
@@ -146,7 +168,7 @@ export function DrawdownTab() {
                 <GrowthChart years={run.years} a={a} display={d} variant="run" />
               </Card>
 
-              {bridge && <BridgeVisualizer bridge={bridge} display={d} a={a} />}
+              {bridge && <BridgeVisualizer bridge={bridge} run={run} display={d} a={a} />}
 
               <div className="grid gap-3 xl:grid-cols-2">
                 <RateArbitragePanel a={a} />

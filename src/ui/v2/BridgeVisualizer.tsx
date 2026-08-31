@@ -7,24 +7,32 @@
 import { Card } from '@/components/ui/card';
 import ReactECharts from 'echarts-for-react';
 import { useMemo } from 'react';
-import type { Assumptions, BridgeReport, DisplayState } from '../../engine/types';
+import type { Assumptions, BridgeReport, DisplayState, RunResult } from '../../engine/types';
 import { CHROME } from '../theme/colors';
 import { fmtMoney0 } from './inputs';
+import { lensBridge } from './lens';
 
 const GOOD = '#0ca30c';
 const CRITICAL = '#d03b3b';
 
 export function BridgeVisualizer({
-  bridge,
+  bridge: bridgeNominal,
+  run,
   display,
   a,
 }: {
   bridge: BridgeReport;
+  run: RunResult;
   display: DisplayState;
   a: Assumptions;
 }) {
   const chrome = CHROME[display.theme];
-  void a;
+  // M5.5 item 1: totals and bars follow the display lens — real sums in
+  // today's-$ mode, never a sum of dollars from different years
+  const bridge = useMemo(
+    () => lensBridge(bridgeNominal, run, a, display.real),
+    [bridgeNominal, run, a, display.real],
+  );
   const gapYears = bridge.years.filter((y) => y.gap > 0.005);
   const lastFunded = (() => {
     let last: number | null = null;
@@ -99,7 +107,7 @@ export function BridgeVisualizer({
           Bridge — accessible money vs need until everything opens
         </h3>
         <span className="text-[11px] text-neutral-500 tnum">
-          spend at start {fmtMoney0(bridge.spendAtStart)} · at access {fmtMoney0(bridge.spendAtAccess)} (nominal)
+          spend at start {fmtMoney0(bridge.spendAtStart)} · at access {fmtMoney0(bridge.spendAtAccess)} ({bridge.lensLabel})
         </span>
       </div>
       <p className="text-xs text-neutral-500" data-testid="bridge-summary">

@@ -93,8 +93,8 @@ export const CHROME: Record<
   }
 > = {
   light: {
-    surface: '#fcfcfb',
-    page: '#f9f9f7',
+    surface: '#ffffff', // M6.2 #4 variant B: card fill — chart spacers/tooltips must match
+    page: '#f1f0eb',
     inkPrimary: '#0b0b0b',
     inkSecondary: '#52514e',
     inkMuted: '#898781',
@@ -102,8 +102,8 @@ export const CHROME: Record<
     axis: '#c3c2b7',
   },
   dark: {
-    surface: '#1a1a19',
-    page: '#0d0d0d',
+    surface: '#1b1b1a', // variant B dark card fill
+    page: '#0c0c0b',
     inkPrimary: '#ffffff',
     inkSecondary: '#c3c2b7',
     inkMuted: '#898781',

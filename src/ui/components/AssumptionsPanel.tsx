@@ -82,7 +82,7 @@ export function AssumptionsPanel() {
   const [open, setOpen] = useState(false);
   const disclaimerLine = assumptionsMd.split('\n').find((l) => l.startsWith('> '));
   return (
-    <div className="rounded border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+    <div className="rounded-[4px] bg-white p-3 dark:bg-[#1b1b1a]">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
           Assumptions & simplifications

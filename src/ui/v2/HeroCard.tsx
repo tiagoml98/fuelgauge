@@ -64,7 +64,7 @@ export function HeroCard({
   const hasWindfall = g.windfalls.length > 0;
 
   return (
-    <Card className="gap-0 rounded-xl border-neutral-200 bg-white p-6 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+    <Card className="gap-0 p-6">
       <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
         {g.name} · growth only — no withdrawals
       </p>

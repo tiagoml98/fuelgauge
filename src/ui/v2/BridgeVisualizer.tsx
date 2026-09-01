@@ -104,7 +104,7 @@ export function BridgeVisualizer({
   );
 
   return (
-    <Card className="gap-1 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+    <Card className="gap-1 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
           Bridge — accessible money vs need until everything opens

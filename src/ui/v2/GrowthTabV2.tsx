@@ -43,7 +43,7 @@ export function GrowthTabV2() {
           liveWidth.current = size.inPixels;
         }}
       >
-        <aside className="h-full overflow-y-auto pr-4" data-testid="inputs-panel">
+        <aside className="col-scroll h-full overflow-y-auto pr-3" data-testid="inputs-panel">
           <Tabs
             value={tier}
             onValueChange={(v) => dispatch({ type: 'patchDisplay', patch: { inputsTier: v as 'basics' | 'advanced' } })}
@@ -68,7 +68,7 @@ export function GrowthTabV2() {
         className="w-1 bg-neutral-200 transition-colors after:w-4 hover:bg-neutral-400 data-[resize-handle-state=drag]:bg-neutral-500 dark:bg-neutral-800 dark:hover:bg-neutral-600"
       />
       <ResizablePanel>
-        <main className="h-full space-y-4 overflow-y-auto pl-4" data-testid="chart-column">
+        <main className="col-scroll h-full space-y-4 overflow-y-auto pl-4 pr-2" data-testid="chart-column">
           {errors.length > 0 && (
             <p
               role="status"

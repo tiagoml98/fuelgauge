@@ -5,7 +5,7 @@
 
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { exportJson, importJsonFile } from './state/persist';
 import { StoreProvider, useSelectedScenario, useStore } from './state/store';
 import { TabErrorBoundary } from './ui/components/TabErrorBoundary';
@@ -21,11 +21,27 @@ function Shell() {
   const [importError, setImportError] = useState<string | null>(null);
   const dark = state.display.theme === 'dark';
 
+  // M6.2 #4: overlay scrollbars show while scrolling, hide ~1s after the last
+  // scroll. Scroll events don't bubble — capture phase catches every column.
+  useEffect(() => {
+    const timers = new WeakMap<Element, ReturnType<typeof setTimeout>>();
+    const onScroll = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof Element) || !el.classList.contains('col-scroll')) return;
+      el.setAttribute('data-scrolling', '');
+      clearTimeout(timers.get(el));
+      timers.set(el, setTimeout(() => el.removeAttribute('data-scrolling'), 1_000));
+    };
+    document.addEventListener('scroll', onScroll, true);
+    return () => document.removeEventListener('scroll', onScroll, true);
+  }, []);
+
   return (
     <div className={dark ? 'dark' : ''}>
       {/* M4.5 item 2: viewport-height frame — the PAGE never scrolls; each
-          column below is its own scroll container */}
-      <div className="flex h-screen flex-col overflow-hidden bg-[#f6f5f2] font-sans text-neutral-900 dark:bg-[#0d0d0d] dark:text-neutral-100">
+          column below is its own scroll container. M6.2 #4 variant B: the
+          deeper page tint carries card separation (cards are borderless). */}
+      <div className="flex h-screen flex-col overflow-hidden bg-[#f1f0eb] font-sans text-neutral-900 dark:bg-[#0c0c0b] dark:text-neutral-100">
         <header className="mx-auto flex w-full max-w-[1560px] shrink-0 flex-wrap items-center gap-x-5 gap-y-2 px-5 pb-1 pt-3">
           <span className="text-[17px] font-bold tracking-tight">FuelGauge</span>
           <nav className="flex gap-4 text-sm" aria-label="Tabs">

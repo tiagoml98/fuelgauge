@@ -38,7 +38,7 @@ export function BalanceTable({
     display.real ? toReal(v, timingExponent(age - startAge, 'startOfYear'), a.inflation) : v;
 
   return (
-    <div className="rounded border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+    <div className="rounded-[4px] bg-white p-3 dark:bg-[#1b1b1a]">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
           Balances{' '}

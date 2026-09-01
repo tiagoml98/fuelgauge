@@ -191,7 +191,7 @@ export function CompareTab() {
   const METRIC_HEADERS = ['spending', 'terminal ATE', 'yrs retired', 'no-gap start', 'bridge', 'cum. tax'];
 
   return (
-    <div className="h-full space-y-4 overflow-y-auto" data-testid="compare-tab">
+    <div className="col-scroll h-full space-y-4 overflow-y-auto pr-2" data-testid="compare-tab">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100" data-testid="compare-count">
           {state.growthScenarios.length} scenario{state.growthScenarios.length === 1 ? '' : 's'} ×{' '}
@@ -221,7 +221,7 @@ export function CompareTab() {
       </div>
 
       {manage && (
-        <Card className="gap-2 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900" data-testid="manage-panel">
+        <Card className="gap-2 p-4" data-testid="manage-panel">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">Manage</span>
             <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setHiddenScenarios([])} disabled={hiddenScenarios.size === 0}>
@@ -314,7 +314,7 @@ export function CompareTab() {
         </Card>
       )}
 
-      <Card className="gap-2 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+      <Card className="gap-2 p-4">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-xs" data-testid="preset-bar">
           <span className="font-semibold text-neutral-700 dark:text-neutral-300">Presets</span>
           <span className="text-[10px] uppercase tracking-wide text-neutral-400">spawn as experiments</span>
@@ -364,11 +364,11 @@ export function CompareTab() {
       </Card>
 
       {visScenarios.length === 0 || visStrategies.length === 0 ? (
-        <Card className="rounded-lg border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+        <Card className="p-6 text-center text-sm text-neutral-400">
           everything is hidden — show scenarios and strategies from “manage”
         </Card>
       ) : singleAxis ? (
-        <Card className="gap-2 overflow-x-auto rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+        <Card className="gap-2 overflow-x-auto p-4">
           <p className="text-[11px] text-neutral-400">
             {visScenarios.length === 1 ? `scenario: ${visScenarios[0].name}` : `strategy: ${visStrategies[0].name}`} — click a
             row to select · click headers to sort ({d.real ? "today's $" : 'nominal'})
@@ -421,7 +421,7 @@ export function CompareTab() {
           </table>
         </Card>
       ) : (
-        <Card className="gap-2 overflow-x-auto rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+        <Card className="gap-2 overflow-x-auto p-4">
           <p className="text-[11px] text-neutral-400">
             click cells to select ({d.real ? "today's $" : 'nominal'} · {selection.length} selected)
           </p>
@@ -512,7 +512,7 @@ export function CompareTab() {
 
       {overlayRuns.length >= 1 ? (
         <>
-          <Card className="gap-1 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+          <Card className="gap-1 p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
                 After-tax-equivalent totals · {d.real ? "today's $" : 'nominal'}
@@ -549,7 +549,7 @@ export function CompareTab() {
           </Card>
 
           {overlayRuns.length >= 2 && (
-            <Card className="gap-2 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+            <Card className="gap-2 p-4">
               <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
                 Deltas vs baseline <span className="font-normal text-neutral-400">({d.real ? "today's $" : 'nominal'})</span>
               </h3>
@@ -591,7 +591,7 @@ export function CompareTab() {
           )}
         </>
       ) : (
-        <Card className="rounded-lg border-neutral-200 bg-white p-6 text-center text-sm text-neutral-400 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+        <Card className="p-6 text-center text-sm text-neutral-400">
           select cells to overlay their after-tax totals and see crossover ages
         </Card>
       )}

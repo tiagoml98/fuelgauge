@@ -12,7 +12,9 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-xl bg-card py-(--card-spacing) text-sm text-card-foreground shadow-xs ring-1 ring-foreground/10 [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-xl *:[img:last-child]:rounded-b-xl",
+        // M6.2 #4 variant B: borderless white fill on the tinted page — no ring,
+        // no shadow, radius 4px; separation comes from the fill contrast alone
+        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-[4px] bg-card py-(--card-spacing) text-sm text-card-foreground shadow-none [--card-spacing:--spacing(6)] has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(4)] *:[img:first-child]:rounded-t-[4px] *:[img:last-child]:rounded-b-[4px]",
         className
       )}
       {...props}

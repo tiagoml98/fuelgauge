@@ -26,7 +26,7 @@ export function RateArbitragePanel({ a }: { a: Assumptions }) {
 
   return (
     <Card
-      className="gap-2 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900"
+      className="gap-2 p-4"
       data-testid="rate-arbitrage"
     >
       <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Rate arbitrage</h3>
@@ -92,7 +92,7 @@ export function MilestonesPanel({
   const age = (v: number | null) => (v === null ? '—' : String(v));
 
   return (
-    <Card className="gap-1 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+    <Card className="gap-1 p-4">
       <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Milestones</h3>
       <Milestone label="Full FIRE age" value={age(metrics.fullAge)} />
       <Milestone label="Barista FIRE age" value={age(metrics.baristaAge)} />

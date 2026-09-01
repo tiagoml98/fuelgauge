@@ -56,6 +56,47 @@ test('hold-to-repeat keeps stepping while held and stops on release', async ({ p
   expect(settled.assumptions.balances.cash).toBe(displayed);
 });
 
+// ---- M6.2 #4: variant B cards + overlay scrollbars --------------------------
+
+test('cards are borderless variant B: no border, no shadow, 4px radius, fill vs tinted page', async ({ page }) => {
+  const state = exampleState('spotcheck');
+  state.display = { ...state.display, theme: 'light' };
+  await loadState(page, state);
+  const card = page.locator('[data-slot="card"]').first();
+  const style = await card.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      borderWidth: s.borderTopWidth,
+      ringOrShadow: s.boxShadow.replaceAll('rgba(0, 0, 0, 0) 0px 0px 0px 0px', '').replaceAll(',', '').trim(),
+      radius: parseFloat(s.borderTopLeftRadius),
+      bg: s.backgroundColor,
+    };
+  });
+  expect(style.borderWidth).toBe('0px');
+  expect(style.ringOrShadow === '' || style.ringOrShadow === 'none').toBe(true); // fully transparent
+  expect(style.radius).toBe(4);
+  // white fill on the #f1f0eb page (Chromium reports the oklch token as-is)
+  expect(['rgb(255, 255, 255)', 'oklch(1 0 0)']).toContain(style.bg);
+});
+
+test('column scrollbars: stable gutter, bar appears on a real wheel scroll and auto-hides', async ({ page }) => {
+  const state = exampleState('spotcheck');
+  state.display = { ...state.display, theme: 'light' };
+  await loadState(page, state);
+  const column = page.getByTestId('chart-column');
+  expect(await column.evaluate((el) => getComputedStyle(el).scrollbarGutter)).toContain('stable');
+
+  // wheel near the top of the column (over the hero card, not the chart —
+  // the chart's wheel is zoom), same recipe as the scroll-independence test
+  const box = (await column.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 100);
+  await page.mouse.wheel(0, 400);
+  // the idle-hide flag drives thumb visibility — set immediately on scroll…
+  await expect(column).toHaveAttribute('data-scrolling', '');
+  // …and gone ~1s after the last scroll (state wait, no fixed sleep)
+  await expect(column).not.toHaveAttribute('data-scrolling', '', { timeout: 5_000 });
+});
+
 // ---- item 4: Basics sections ------------------------------------------------
 
 test('Basics sections collapse like Advanced and the collapse persists', async ({ page }) => {

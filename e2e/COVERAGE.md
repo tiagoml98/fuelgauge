@@ -115,6 +115,8 @@ table/tooltip/bridge equality).
 | Draft inputs never re-take focus after commit (late select-frame guard) | NI:late-focus-select — the race forced deterministically via trapped rAF |
 | Hero readout statements — never split across lines at three widths | PO:hero-statements |
 | Radius token scale — no pills; computed radii ≤ 6px on card/input/tab/button/badge + screenshot artifact | PO:radius |
+| Card style variant B (M6.2 #4): borderless, shadowless, 4px radius, white/`#1b1b1a` fill on tinted page | PO:variant-b (computed border/shadow/radius/bg) |
+| Overlay column scrollbars (M6.2 #4): stable gutter, appears on real wheel scroll, auto-hides ~1s idle | PO:scrollbars (gutter computed + data-scrolling set on scroll, gone via state wait) |
 | Basics: Your age | NI:partial-typing |
 | Basics: 5 balance fields | NI (leading-zeros, enter, invalid, escape) — one per behavior, same component class |
 | Basics: 5 contribution ScheduleControls (simple amount + until age) | SE:simple-mode · PS:maximal |
@@ -218,4 +220,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 275/275 items covered (72 state fields + 71 VARIABLES rows + 84 Growth + 25 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields, +5 Drawdown, +8 Compare over the M6 count of 250; de-flake patch +1; M6.2 re-audit: +2 state fields (basis explicit-entry trio, strategies[].medical), +3 Growth-panel items (basis UX, Advanced sections, sensitivity hints), +2 Drawdown items (medical slice, HSA last resort).**
+**Manifest: 277/277 items covered (72 state fields + 71 VARIABLES rows + 86 Growth + 25 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields, +5 Drawdown, +8 Compare over the M6 count of 250; de-flake patch +1; M6.2 re-audit: +2 state fields (basis explicit-entry trio, strategies[].medical), +3 Growth-panel items (basis UX, Advanced sections, sensitivity hints), +2 Drawdown items (medical slice, HSA last resort), +2 visual items (variant-B cards, overlay scrollbars).**

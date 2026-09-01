@@ -25,7 +25,7 @@ import { StrategyMenu } from './StrategyMenu';
 
 function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <Card className="gap-0.5 rounded-lg border-neutral-200 bg-white px-4 py-3 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+    <Card className="gap-0.5 px-4 py-3">
       <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{label}</div>
       <div className="tnum text-xl font-semibold text-neutral-900 dark:text-neutral-50">{value}</div>
       {hint && <div className="text-[11px] text-neutral-400">{hint}</div>}
@@ -72,7 +72,7 @@ export function DrawdownTab() {
           liveWidth.current = size.inPixels;
         }}
       >
-        <aside className="h-full overflow-y-auto pr-4" data-testid="strategy-panel">
+        <aside className="col-scroll h-full overflow-y-auto pr-3" data-testid="strategy-panel">
           <StrategyMenu strategy={strategy} />
           <StrategyEditor a={a} g={scenario} w={strategy} />
         </aside>
@@ -84,7 +84,7 @@ export function DrawdownTab() {
         className="w-1 bg-neutral-200 transition-colors after:w-4 hover:bg-neutral-400 data-[resize-handle-state=drag]:bg-neutral-500 dark:bg-neutral-800 dark:hover:bg-neutral-600"
       />
       <ResizablePanel>
-        <main className="h-full space-y-4 overflow-y-auto pl-4" data-testid="drawdown-column">
+        <main className="col-scroll h-full space-y-4 overflow-y-auto pl-4 pr-2" data-testid="drawdown-column">
           {errors.length > 0 && (
             <p
               role="status"
@@ -95,7 +95,7 @@ export function DrawdownTab() {
           )}
 
           {!hasSpending && (
-            <Card className="gap-1 rounded-lg border-neutral-200 bg-white p-6 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+            <Card className="gap-1 p-6">
               <span className="text-lg font-semibold text-neutral-400">no spending entered</span>
               <p className="text-sm text-neutral-500">
                 Set a FIRE spending target under Growth → Basics, or add spending rows in the
@@ -118,7 +118,7 @@ export function DrawdownTab() {
                   hint={`${tiles.lensLabel} at ${a.horizonAge}`}
                 />
                 <Card
-                  className="gap-0.5 rounded-lg border-neutral-200 bg-white px-4 py-3 shadow-none dark:border-neutral-800 dark:bg-neutral-900"
+                  className="gap-0.5 px-4 py-3"
                   data-testid="funding-spans"
                 >
                   <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Funding</div>
@@ -141,7 +141,7 @@ export function DrawdownTab() {
                 />
               </div>
 
-              <Card className="gap-0 rounded-lg border-neutral-200 bg-white p-4 shadow-none dark:border-neutral-800 dark:bg-neutral-900">
+              <Card className="gap-0 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">

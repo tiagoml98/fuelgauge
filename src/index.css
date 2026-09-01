@@ -96,7 +96,7 @@
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
+  --card: #1b1b1a; /* M6.2 #4 variant B: card fill vs #0c0c0b page */
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
@@ -136,5 +136,50 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+ * M6.2 #4: thin overlay scrollbars on the column scroll containers.
+ * ~6px rounded thumb, transparent track, visible while scrolling or hovering
+ * the column, auto-hidden ~1s after the last scroll (data-scrolling is set by
+ * the capture-phase listener in App). scrollbar-gutter: stable reserves the
+ * lane so content never shifts; the column's own padding keeps the bar in the
+ * gutter, off the cards.
+ */
+.col-scroll {
+  scrollbar-gutter: stable;
+}
+.col-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.col-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.col-scroll::-webkit-scrollbar-thumb {
+  border-radius: 3px;
+  background: transparent;
+}
+.col-scroll:hover::-webkit-scrollbar-thumb,
+.col-scroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22);
+}
+.dark .col-scroll:hover::-webkit-scrollbar-thumb,
+.dark .col-scroll[data-scrolling]::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+}
+/* non-WebKit fallback: the standard thin scrollbar */
+@supports not selector(::-webkit-scrollbar) {
+  .col-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .col-scroll:hover,
+  .col-scroll[data-scrolling] {
+    scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+  }
+  .dark .col-scroll:hover,
+  .dark .col-scroll[data-scrolling] {
+    scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
   }
 }

@@ -6,13 +6,13 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
 user-visible outcomes (positions, rendered text) from real pointer/keyboard input.
 
-## 1. PersistedState fields (schema v1) — 62/62
+## 1. PersistedState fields (schema v1) — 65/65
 
 | Field | Test |
 |---|---|
@@ -72,7 +72,10 @@ user-visible outcomes (positions, rendered text) from real pointer/keyboard inpu
 | display.panelWidth | PS:maximal · LT:divider-drag (real drag persists on release) |
 | display.inputsTier | PS:maximal · LT:advanced-tier |
 | display.basicsCollapsed | PO:basics-sections (collapse + reload persistence) |
-| display.activeTab | DD:tab-switching (switch, reload persistence) |
+| display.activeTab | DD:tab-switching (switch, reload persistence) · PS:maximal |
+| growthScenarios[].experiment / strategies[].experiment (M6.1) | PS:maximal (scenario) · CM:experiments (spawn tags, keep clears, clear removes) |
+| display.hiddenScenarios / hiddenStrategies (M6.1) | PS:maximal · CM:visibility (hide → deselect → persist through reload) |
+| display.compareSelection / compareBaseline | PS:maximal · CP:hand-case · CM:bulk-delete (cleaned on delete/hide) |
 
 ## 2. VARIABLES.md rows — 71/71
 
@@ -141,7 +144,7 @@ table/tooltip/bridge equality).
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-## 4. Drawdown-tab controls (M5 re-audit) — 18/18
+## 4. Drawdown-tab controls (M5 re-audit + M6.1) — 23/23
 
 `DD` = drawdown.spec. All under the console guard.
 
@@ -165,28 +168,41 @@ table/tooltip/bridge equality).
 | Milestones panel + plain-language readout | DD:locked |
 | No-spending empty state (C.5) | DD:tab-switching |
 | Balance table need/withdrawn/gap columns (gap rows forced into the 5-yr view) | DD:locked · DD:swr-flat |
+| Funding tile span summary — phases + collapsed "funded through H ✓" (M6.1 #2) | DD:locked (locked out 45–59 · funded 60+) · DD:swr-flat (funded through 90 ✓) |
+| Two-tone gap shading + legend badge (amber locked / red depleted) (M6.1 #2) | DD:locked (badge text) — the washes are canvas paint, verified by QA screenshot |
+| Bridge summary counts locked vs depleted apart (M6.1 #2) | DD:locked (15 locked years ✗) |
+| Readout narrates phases + attempted-vs-withdrawn in locked years (M6.1 #2) | DD:locked (During 45–59, withdrawals attempted $40,000/yr) |
+| Chart structure: buckets = 4 aggregate series (structurally seamless), accounts = per-account with year-step (M6.1 #1) | DD:bucket-series (data-series artifact both modes) |
 
-## 5. Compare-tab controls (M6 re-audit) — 14/14
+## 5. Compare-tab controls (M6 re-audit + M6.1) — 22/22
 
-`CP` = compare.spec. All under the console guard.
+`CP` = compare.spec, `CM` = compare-manage.spec. All under the console guard.
 
 | Control | Test |
 |---|---|
 | Compare tab nav + activeTab='compare' persistence | CP (loads via state) · DD:tab-switching pattern |
-| Grid cells (7 metrics each, lens rule, no-spending state, error state) | CP:grid-two-cells (both lenses, engine equality) |
+| Grid cells (compact 2-col metrics, lens rule, no-spending state, error state) | CP:cell-metrics (both lenses, engine equality) |
 | Cell selection toggle + selection ring/color dot | CP:hand-case · CP:baseline-deltas |
-| Lens toggles on the grid | CP:grid-two-cells |
+| Lens toggles on the grid | CP:cell-metrics |
 | Overlay chart + crossover markers + data-crossovers artifact | CP:hand-case (66, machine-checked) · CP:retire-pair (correctly none) |
-| Baseline picker | CP:baseline-deltas |
-| Delta table (signed, lens rule) | CP:hand-case · CP:baseline-deltas |
+| Baseline picker (≥ 2 distinct runs only) | CP:baseline-deltas · CM:single-cell (absent with 1) |
+| Delta table (signed, lens rule; never a self-delta) | CP:hand-case · CP:baseline-deltas · CM:single-cell (absent with 1) |
 | Preset: Traditional vs Roth equal take-home + §8 driver note | CP:equal-take-home + unit presets tests |
 | Preset: stop contributing at X (age input) | CP:normalized-presets |
 | Preset: reduce 401k to Y at Z (two inputs) | CP:normalized-presets |
 | Preset: retire at X vs Y (two inputs) | CP:retire-pair |
 | Preset: stress first 3 drawdown years | CP:normalized-presets (exact rows) |
 | Ladder-bridge P2 note (not faked) | CP:normalized-presets |
-| Empty state (< 2 selected) + ?mockup routes removed | CP:baseline-deltas · rendered by default state |
+| Empty state (0 selected) + ?mockup routes removed | CP:baseline-deltas · rendered by default state |
+| Count badge (N scenarios × M strategies · hidden · experiments) (M6.1 #3d) | CM:bulk-delete · CM:visibility · CM:experiments |
+| Manage mode: multi-select checkboxes, one-confirm batch delete, cleaned selections, URL round-trip (M6.1 #3a) | CM:bulk-delete + unit store bulkDelete tests |
+| Eye toggles per row/column + show all + hide all but selected (M6.1 #3b) | CM:visibility + unit store setHidden tests |
+| Everything-hidden honest empty state (M6.1 #3b) | CM:visibility |
+| Experiments: spawn-tagged, grouped last under divider, exp badge, keep promotes, clear removes incl. URL (M6.1 #3c) | CM:experiments · CP:equal-take-home (divider + keep) + unit store keep/clear tests |
+| Degenerate single-axis table + sortable metric headers + grid restore at ≥2×2 (M6.1 #4) | CM:sort · CM:visibility (grid↔table flip) · CP:cell-metrics |
+| Funding span column/row in cells (M6.1 #2) | CP:cell-metrics (locked + clean span text) |
+| Single-cell overlay: curve + hint, no baseline tag, no deltas, no crossovers (M6.1 #5) | CM:single-cell |
 
-Display fields `compareSelection` / `compareBaseline`: CP:hand-case + CP:retire-pair (set, read back).
+Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 250/250 items covered (66 state fields + 71 VARIABLES rows + 80 Growth + 18 Drawdown + 14 Compare + 1 route-removal check).**
+**Manifest: 267/267 items covered (70 state fields + 71 VARIABLES rows + 80 Growth + 23 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields (experiment ×2, hidden lists ×2), +5 Drawdown items, +8 Compare items over the M6 count of 250.**

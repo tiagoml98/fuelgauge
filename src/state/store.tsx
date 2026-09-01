@@ -46,6 +46,11 @@ export type Action =
   | { type: 'patchDisplay'; patch: Partial<DisplayState> }
   /** M6 presets: add fully-formed objects (fresh ids assigned here) and select them for compare. */
   | { type: 'addCompareRuns'; scenarios: GrowthScenario[]; strategies: WithdrawalStrategy[] }
+  /** M6.1 sprawl management */
+  | { type: 'bulkDelete'; scenarioIds: string[]; strategyIds: string[] }
+  | { type: 'setHidden'; scenarios?: string[]; strategies?: string[] }
+  | { type: 'keepExperiment'; kind: 'scenario' | 'strategy'; id: string }
+  | { type: 'clearExperiments' }
   | { type: 'replaceState'; state: PersistedState };
 
 const newId = (): string =>
@@ -170,8 +175,9 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
     case 'patchDisplay':
       return { ...state, display: { ...state.display, ...action.patch } };
     case 'addCompareRuns': {
-      const scenarios = action.scenarios.map((g) => ({ ...g, id: newId() }));
-      const strategies = action.strategies.map((w) => ({ ...w, id: newId() }));
+      // M6.1 #3c: presets spawn EXPERIMENTS — grouped, one-click keep, bulk clear
+      const scenarios = action.scenarios.map((g) => ({ ...g, id: newId(), experiment: true }));
+      const strategies = action.strategies.map((w) => ({ ...w, id: newId(), experiment: true }));
       const allScenarios = [...state.growthScenarios, ...scenarios];
       const allStrategies = [...state.strategies, ...strategies];
       // selection: every spawned scenario × the reference strategy (and vice versa)
@@ -196,9 +202,82 @@ export function reducer(state: PersistedState, action: Action): PersistedState {
         },
       };
     }
+    case 'bulkDelete': {
+      const scenarioIds = new Set(action.scenarioIds);
+      const strategyIds = new Set(action.strategyIds);
+      const scenarios = state.growthScenarios.filter((g) => !scenarioIds.has(g.id));
+      const strategies = state.strategies.filter((w) => !strategyIds.has(w.id));
+      if (scenarios.length === 0 || strategies.length === 0) return state; // never delete the last one
+      return cleanSelections({ ...state, growthScenarios: scenarios, strategies });
+    }
+    case 'setHidden': {
+      const next = {
+        ...state,
+        display: {
+          ...state.display,
+          ...(action.scenarios !== undefined ? { hiddenScenarios: action.scenarios } : {}),
+          ...(action.strategies !== undefined ? { hiddenStrategies: action.strategies } : {}),
+        },
+      };
+      return cleanSelections(next); // hiding deselects from the overlay
+    }
+    case 'keepExperiment':
+      return action.kind === 'scenario'
+        ? {
+            ...state,
+            growthScenarios: state.growthScenarios.map((g) =>
+              g.id === action.id ? { ...g, experiment: undefined } : g,
+            ),
+          }
+        : {
+            ...state,
+            strategies: state.strategies.map((w) =>
+              w.id === action.id ? { ...w, experiment: undefined } : w,
+            ),
+          };
+    case 'clearExperiments': {
+      const scenarios = state.growthScenarios.filter((g) => !g.experiment);
+      const strategies = state.strategies.filter((w) => !w.experiment);
+      if (scenarios.length === 0 || strategies.length === 0) return state;
+      return cleanSelections({ ...state, growthScenarios: scenarios, strategies });
+    }
     case 'replaceState':
       return action.state;
   }
+}
+
+/** Selections, baseline, selected ids, and hidden lists never reference missing or hidden objects. */
+function cleanSelections(state: PersistedState): PersistedState {
+  const scenarioIds = new Set(state.growthScenarios.map((g) => g.id));
+  const strategyIds = new Set(state.strategies.map((w) => w.id));
+  const hiddenScenarios = new Set(state.display.hiddenScenarios ?? []);
+  const hiddenStrategies = new Set(state.display.hiddenStrategies ?? []);
+  const visible = (c: { scenarioId: string; strategyId: string }) =>
+    scenarioIds.has(c.scenarioId) &&
+    strategyIds.has(c.strategyId) &&
+    !hiddenScenarios.has(c.scenarioId) &&
+    !hiddenStrategies.has(c.strategyId);
+  const selection = (state.display.compareSelection ?? []).filter(visible);
+  const baseline =
+    state.display.compareBaseline && visible(state.display.compareBaseline)
+      ? state.display.compareBaseline
+      : selection[0];
+  return {
+    ...state,
+    display: {
+      ...state.display,
+      compareSelection: selection,
+      compareBaseline: baseline,
+      hiddenScenarios: (state.display.hiddenScenarios ?? []).filter((id) => scenarioIds.has(id)),
+      hiddenStrategies: (state.display.hiddenStrategies ?? []).filter((id) => strategyIds.has(id)),
+      selectedScenarioId: scenarioIds.has(state.display.selectedScenarioId ?? '')
+        ? state.display.selectedScenarioId
+        : state.growthScenarios[0].id,
+      selectedStrategyId: strategyIds.has(state.display.selectedStrategyId ?? '')
+        ? state.display.selectedStrategyId
+        : state.strategies[0].id,
+    },
+  };
 }
 
 const StoreContext = createContext<{ state: PersistedState; dispatch: Dispatch<Action> } | null>(

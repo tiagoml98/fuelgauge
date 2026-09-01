@@ -23,23 +23,32 @@ test('locked case: red gap years in the bridge, gap rows in the table, rollover 
   await loadState(page, drawdownState('locked'));
   // Bridge: the gate's red-gap-years deliverable, in readable form.
   // M5.5 item 1: today's-$ mode shows REAL sums; nominal sums only in nominal mode.
-  await expect(page.getByTestId('bridge-summary')).toContainText('15 gap years ✗');
+  // M6.1 #2: the bridge summary names the failure — locked, not generic "gap"
+  await expect(page.getByTestId('bridge-summary')).toContainText('15 locked years ✗');
   await expect(page.getByTestId('bridge-summary')).toContainText('$40,000 of $640,000 funded');
   await expect(page.getByText("spend at start $40,000 · at access $40,000 (today's $)")).toBeVisible();
   await expect(page.getByText("today's $, funded years only")).toBeVisible(); // tile subtitle states the lens
   await page.getByRole('tab', { name: 'nominal' }).click();
   await expect(page.getByTestId('bridge-summary')).toContainText('$62,319 of $806,275 funded');
   await expect(page.getByText('nominal, funded years only')).toBeVisible();
-  // M5.5 item 2: funded-through tile + honest years-retired subtitle
-  await expect(page.getByText('gaps from the start')).toBeVisible();
+  // M6.1 #2: funding tile shows the span phases; years-retired keeps its honest subtitle
+  await expect(page.getByTestId('funding-spans')).toContainText('locked out 45–59 · funded 60+');
   await expect(page.getByText('planned span from 45 — not the funded span')).toBeVisible();
   await page.getByRole('tab', { name: "today's $" }).click();
   // Gap rows are flagged in the balance table (yearly off — gap rows still forced in)
   await expect(page.locator('[data-gap-age="45"]')).toContainText('GAP');
   await expect(page.locator('[data-gap-age="59"]')).toContainText('GAP');
   await expect(page.locator('[data-gap-age="60"]')).toHaveCount(0); // first funded year
-  // Readout + milestones
+  // M6.1 #2: the chart legend names both gap shades
+  await expect(
+    page.getByText('solid = drawdown start · dotted = access ages · amber = locked years · red = depleted'),
+  ).toBeVisible();
+  // Readout + milestones — M6.1 #2: narrates the phases and what was attempted while locked
   await expect(page.getByTestId('readout')).toContainText('locked until 60');
+  await expect(page.getByTestId('readout')).toContainText('locked out 45–59 · funded 60+');
+  await expect(page.getByTestId('readout')).toContainText(
+    'During 45–59, withdrawals attempted $40,000/yr — all sources locked',
+  );
   await expect(page.getByText('first gap at 45 ✗')).toBeVisible();
   // Rollover appears in the chart's crosshair readout at 60
   const canvas = page.locator('canvas').first();
@@ -50,6 +59,20 @@ test('locked case: red gap years in the bridge, gap rows in the table, rollover 
   await page.mouse.move(x, box.y + box.height / 2);
   await page.mouse.move(x, box.y + box.height / 2 - 4);
   await expect(page.getByText('Traditional 401k → Traditional IRA', { exact: false }).first()).toBeVisible();
+});
+
+test('buckets mode charts the 4 aggregate bucket series; accounts mode charts per-account (M6.1 #1)', async ({ page }) => {
+  await loadState(page, drawdownState('locked'));
+  // Buckets = aggregates only → rollovers inside a bucket are structurally
+  // invisible (no seam is possible); accounts mode steps between years instead
+  const series = async () =>
+    JSON.parse((await page.locator('[data-series]').first().getAttribute('data-series'))!) as string[];
+  expect(await series()).toEqual(['Pre-tax', 'Roth', 'HSA', 'Taxable']);
+  await page.getByRole('tab', { name: 'accounts' }).click();
+  const accounts = await series();
+  expect(accounts).toHaveLength(7);
+  expect(accounts).toContain('Traditional 401k');
+  expect(accounts).toContain('Traditional IRA');
 });
 
 test('drawdown-start and access-age markers render at N − 0.5 (gate requirement)', async ({ page }) => {
@@ -66,6 +89,8 @@ test('swr-flat case: bridge funded, no gaps, real spend constant at three ages',
   await loadState(page, state);
   await expect(page.getByTestId('bridge-summary')).toContainText('fully funded ✓');
   await expect(page.locator('[data-gap-age]')).toHaveCount(0);
+  // M6.1 #2: a clean run collapses to the single funded-through line
+  await expect(page.getByTestId('funding-spans')).toContainText('funded through 90 ✓');
 
   // engine equality through the run path: need column real = 40,000 at three ages
   const a = state.assumptions;

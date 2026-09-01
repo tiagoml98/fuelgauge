@@ -34,6 +34,9 @@ export function BridgeVisualizer({
     [bridgeNominal, run, a, display.real],
   );
   const gapYears = bridge.years.filter((y) => y.gap > 0.005);
+  const kindAt = (age: number) => run.years.find((y) => y.age === age)?.gapKind;
+  const lockedCount = gapYears.filter((y) => kindAt(y.age) === 'locked').length;
+  const depletedCount = gapYears.length - lockedCount;
   const lastFunded = (() => {
     let last: number | null = null;
     for (const y of bridge.years) {
@@ -119,8 +122,12 @@ export function BridgeVisualizer({
                 fully funded ✓
               </span>
             ) : (
+              // M6.1 #2: the bridge counts LOCKED years specifically —
+              // depletion inside the window is a different failure, named apart
               <span className="font-semibold" style={{ color: CRITICAL }}>
-                {gapYears.length} gap year{gapYears.length === 1 ? '' : 's'} ✗
+                {lockedCount > 0 && `${lockedCount} locked year${lockedCount === 1 ? '' : 's'} ✗`}
+                {lockedCount > 0 && depletedCount > 0 && ' · '}
+                {depletedCount > 0 && `${depletedCount} depleted (not a bridge problem)`}
               </span>
             )}{' '}
             — {fmtMoney0(bridge.totalFunding)} of {fmtMoney0(bridge.totalCost)} funded

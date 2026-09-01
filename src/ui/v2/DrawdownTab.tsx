@@ -19,7 +19,7 @@ import { BridgeVisualizer } from './BridgeVisualizer';
 import { MilestonesPanel, RateArbitragePanel } from './DrawdownPanels';
 import { Lens } from './HeroCard';
 import { fmtMoney0, fmtMoneyM } from './inputs';
-import { runTiles } from './lens';
+import { formatSpans, runTiles } from './lens';
 import { StrategyEditor } from './StrategyEditor';
 import { StrategyMenu } from './StrategyMenu';
 
@@ -117,23 +117,18 @@ export function DrawdownTab() {
                   value={fmtMoneyM(tiles.terminalAte)}
                   hint={`${tiles.lensLabel} at ${a.horizonAge}`}
                 />
-                <Tile
-                  label="Funded through"
-                  value={
-                    tiles.fundedThrough === 'horizon'
-                      ? `${a.horizonAge} ✓`
-                      : tiles.fundedThrough === null
-                        ? '— ✗'
-                        : `${tiles.fundedThrough}`
-                  }
-                  hint={
-                    tiles.fundedThrough === 'horizon'
-                      ? 'no gap years'
-                      : tiles.fundedThrough === null
-                        ? 'gaps from the start'
-                        : `money runs out at ${run.summary.firstGapAge}`
-                  }
-                />
+                <Card
+                  className="gap-0.5 rounded-lg border-neutral-200 bg-white px-4 py-3 shadow-none dark:border-neutral-800 dark:bg-neutral-900"
+                  data-testid="funding-spans"
+                >
+                  <div className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">Funding</div>
+                  <div className="text-sm font-medium leading-5 text-neutral-900 dark:text-neutral-50">
+                    {formatSpans(tiles.spans, a.horizonAge)}
+                  </div>
+                  <div className="text-[11px] text-neutral-400">
+                    locked = assets exist but inaccessible · depleted = nothing left
+                  </div>
+                </Card>
                 <Tile
                   label="Years retired"
                   value={String(run.summary.yearsRetired)}
@@ -156,7 +151,7 @@ export function DrawdownTab() {
                       variant="outline"
                       className="mt-0.5 border-neutral-200 text-[10px] font-medium uppercase tracking-wide text-neutral-400 dark:border-neutral-700"
                     >
-                      solid = drawdown start · dotted = access ages · shaded = gap years
+                      solid = drawdown start · dotted = access ages · amber = locked years · red = depleted
                     </Badge>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -173,7 +168,7 @@ export function DrawdownTab() {
               <div className="grid gap-3 xl:grid-cols-2">
                 <RateArbitragePanel a={a} />
                 {bridge && (
-                  <MilestonesPanel run={run} bridge={bridge} metrics={metrics} coastAge={coastAge} a={a} />
+                  <MilestonesPanel run={run} bridge={bridge} metrics={metrics} coastAge={coastAge} a={a} tiles={tiles} real={d.real} />
                 )}
               </div>
 

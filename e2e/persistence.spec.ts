@@ -125,7 +125,12 @@ function maximalState(): PersistedState {
   g.cashContrib = [{ fromAge: 42, toAge: 45, value: 5_000 }];
   g.windfalls = [{ age: 47, amount: 250_000, target: 'rothIra', label: 'vested RSUs', filer: 1 }];
   g.returnScheduleOverride = [{ fromAge: 0, toAge: null, value: 0.04 }];
-  s.growthScenarios.push({ ...structuredClone(g), id: 'second', name: 'Second scenario' });
+  s.growthScenarios.push({
+    ...structuredClone(g),
+    id: 'second',
+    name: 'Second scenario',
+    experiment: true, // M6.1: experiment tag round-trips
+  });
   s.strategies[0] = {
     ...s.strategies[0],
     name: 'Retire at 55',
@@ -145,6 +150,12 @@ function maximalState(): PersistedState {
     selectedStrategyId: s.strategies[0].id,
     panelWidth: 520,
     inputsTier: 'advanced',
+    // M6.1: compare + visibility state round-trips
+    activeTab: 'drawdown',
+    compareSelection: [{ scenarioId: 'second', strategyId: s.strategies[0].id }],
+    compareBaseline: { scenarioId: 'second', strategyId: s.strategies[0].id },
+    hiddenScenarios: [s.growthScenarios[0].id],
+    hiddenStrategies: [],
   };
   return s;
 }

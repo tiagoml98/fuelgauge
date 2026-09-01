@@ -40,15 +40,17 @@ function handCrossState(): PersistedState {
   return s;
 }
 
-test('grid metrics for two cells match the engine under both lenses', async ({ page }) => {
+test('cell metrics for two cells match the engine under both lenses (single-scenario table)', async ({ page }) => {
   const state = compareState();
   await loadState(page, state);
   const a = state.assumptions;
+  // M6.1 #4: one scenario → the degenerate sortable table, strategies as rows
+  await expect(page.getByTestId('compare-list')).toBeVisible();
   for (const real of [true, false]) {
     await page.getByRole('tab', { name: real ? "today's $" : 'nominal' }).click();
     for (const w of state.strategies) {
       const run = simulateRun(a, state.growthScenarios[0], w);
-      const cell = page.getByRole('button', { name: `cell ${state.growthScenarios[0].name} × ${w.name}` });
+      const cell = page.getByLabel(`cell row ${w.name}`);
       // lens rule (M5.5 item 1) applied across the grid: real sums in today's-$ mode
       const { runTiles } = await import('../src/ui/v2/lens');
       const tiles = runTiles(run, a, real);
@@ -57,6 +59,13 @@ test('grid metrics for two cells match the engine under both lenses', async ({ p
       await expect(cell).toContainText(run.summary.bridgeFunded ? '✓' : '✗');
     }
   }
+  // M6.1 #2: the funding column shows span phases per row
+  await expect(page.getByLabel(`cell row ${state.strategies[0].name}`)).toContainText(
+    'locked out 45–59 · funded 60+',
+  );
+  await expect(page.getByLabel(`cell row ${state.strategies[1].name}`)).toContainText(
+    'funded through 90 ✓',
+  );
 });
 
 test('hand case: stop-at-45 vs reduce-to-8k crossover at exactly 66, marked and machine-checked', async ({ page }) => {
@@ -68,11 +77,11 @@ test('hand case: stop-at-45 vs reduce-to-8k crossover at exactly 66, marked and 
   await commitInput(page, 'Reduce preset amount', '8000');
   await commitInput(page, 'Reduce preset age', '31');
   await page.getByRole('button', { name: 'Reduce 401k to', exact: true }).click();
-  // add the stop cell back into the selection via the grid
+  // add the stop cell back into the selection — one strategy → table rows are scenarios
   const s = await readState(page);
   const stopScenario = s.growthScenarios.find((g) => g.name.includes('stop at 45'))!;
   const reduceScenario = s.growthScenarios.find((g) => g.name.includes('reduce 401k'))!;
-  await page.getByRole('button', { name: `cell ${stopScenario.name} × ${s.strategies[0].name}` }).click();
+  await page.getByLabel(`cell row ${stopScenario.name}`).click();
 
   const crossovers = JSON.parse(
     (await page.locator('[data-crossovers]').getAttribute('data-crossovers'))!,
@@ -114,6 +123,10 @@ test('equal-take-home preset spawns both paths with the §8 explanation', async 
   expect(validateRows(roth.taxableContrib)).toEqual([]);
   // drawdown.json has no contributions → no crossover story, but the note still explains the driver
   await expect(page.getByTestId('preset-note')).toContainText('rate');
+  // M6.1 #3d: spawned scenarios group under the experiments divider with keep buttons
+  expect(trad.experiment).toBe(true);
+  await expect(page.getByText('experiments', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'keep' }).first()).toBeVisible();
 });
 
 test('stop/reduce/stress presets produce normalized rows — never overrides', async ({ page }) => {
@@ -153,10 +166,10 @@ test('stop/reduce/stress presets produce normalized rows — never overrides', a
 
 test('baseline picker drives the delta table; mockup routes are gone', async ({ page }) => {
   await loadState(page, compareState());
-  // select both cells of the 1×2 grid
+  // select both rows of the 1-scenario table
   const s0 = await readState(page);
-  await page.getByRole('button', { name: `cell ${s0.growthScenarios[0].name} × ${s0.strategies[0].name}` }).click();
-  await page.getByRole('button', { name: `cell ${s0.growthScenarios[0].name} × ${s0.strategies[1].name}` }).click();
+  await page.getByLabel(`cell row ${s0.strategies[0].name}`).click();
+  await page.getByLabel(`cell row ${s0.strategies[1].name}`).click();
   await expect(page.getByTestId('delta-table')).toBeVisible();
   await expect(page.getByTestId('delta-table').locator('tbody tr')).toHaveCount(1);
   // switch baseline → the other run becomes the delta row

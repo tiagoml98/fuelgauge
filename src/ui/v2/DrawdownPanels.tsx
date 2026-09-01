@@ -5,9 +5,11 @@
 
 import { Card } from '@/components/ui/card';
 import { latestAccessAgeF1 } from '../../engine/run';
+import { timingExponent, toReal } from '../../engine/schedule';
 import type { Assumptions, BridgeReport, RunResult } from '../../engine/types';
 import type { DrawdownMetrics } from '../../state/derived';
 import { fmtMoney0 } from './inputs';
+import { formatSpans, type RunTiles } from './lens';
 
 const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 
@@ -62,12 +64,16 @@ export function MilestonesPanel({
   metrics,
   coastAge,
   a,
+  tiles,
+  real,
 }: {
   run: RunResult;
   bridge: BridgeReport;
   metrics: DrawdownMetrics;
   coastAge: number | null;
   a: Assumptions;
+  tiles: RunTiles;
+  real: boolean;
 }) {
   const s = run.summary;
   const D = run.drawdownStartAge;
@@ -117,8 +123,28 @@ export function MilestonesPanel({
                 : 'not funded'}
           </>
         )}
-        . Lifetime after-tax spending {fmtMoney0(s.lifetimeAfterTaxSpending)} · cumulative tax{' '}
-        {fmtMoney0(s.cumulativeTax)}.
+        . <strong>{formatSpans(s.spans, a.horizonAge)}</strong>.
+        {(() => {
+          // M6.1 #2: attempted-vs-withdrawn during locked years
+          const locked = s.spans.find((sp) => sp.kind === 'locked');
+          if (!locked) return null;
+          const y = run.years.find((yy) => yy.age === locked.from);
+          if (!y || y.need === undefined) return null;
+          const startAge = run.years[0].age;
+          const attempted = real
+            ? toReal(y.need, timingExponent(y.age - startAge, 'startOfYear'), a.inflation)
+            : y.need;
+          const withdrawn = Object.values(y.withdrawals ?? {}).reduce((sum, v) => sum + (v ?? 0), 0);
+          return (
+            <>
+              {' '}
+              During {locked.from}–{locked.to}, withdrawals attempted {fmtMoney0(attempted)}/yr —{' '}
+              {withdrawn > 0.005 ? 'only partly accessible' : 'all sources locked'}.
+            </>
+          );
+        })()}{' '}
+        Lifetime after-tax spending {fmtMoney0(tiles.lifetimeAfterTaxSpending)} · cumulative tax{' '}
+        {fmtMoney0(tiles.cumulativeTax)} ({tiles.lensLabel}).
       </p>
     </Card>
   );

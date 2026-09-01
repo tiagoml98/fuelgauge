@@ -269,6 +269,8 @@ export interface GrowthScenario {
   /** Unique id — generating/uniquing ids is the UI's responsibility (factories default to 'base'). */
   id: string;
   name: string;
+  /** M6.1 #3c: preset-spawned trial, grouped under "experiments" until kept. Optional, no migration. */
+  experiment?: boolean;
   /** Aligned with Assumptions.filers; match is per filer salary (SPEC §12). */
   perFiler: FilerGrowthInputs[];
   /** Household schedule; contributions auto-stop at 65 (SPEC §2). */
@@ -311,6 +313,8 @@ export interface WithdrawalStrategy {
   /** Unique id — generating/uniquing ids is the UI's responsibility (factories default to 'base'). */
   id: string;
   name: string;
+  /** M6.1 #3c: preset-spawned trial, grouped under "experiments" until kept. Optional, no migration. */
+  experiment?: boolean;
   /**
    * Filer-1 age. undefined = auto (gate #15): earliest filer separation age in the
    * paired growth scenario; if the scenario has no salary rows, coastTargetAge.
@@ -385,7 +389,19 @@ export interface RunYear {
   unmet?: number;
   /** Accessible sources ran out — reported, not covered (SPEC §6). */
   gap: boolean;
+  /**
+   * M6.1 #2: which failure a gap is — 'locked' when inaccessible assets ≥ the
+   * unmet need (the bridge problem), 'depleted' when nothing is left.
+   */
+  gapKind?: 'locked' | 'depleted';
   events: MarkerEvent[];
+}
+
+/** A contiguous stretch of drawdown years sharing one funding condition (M6.1 #2). */
+export interface RunSpan {
+  kind: 'funded' | 'locked' | 'depleted';
+  from: number;
+  to: number;
 }
 
 /** Compare-grid cell metrics (SPEC §3, gate #E3). */
@@ -397,6 +413,8 @@ export interface RunSummary {
   firstGapAge: number | null;
   bridgeFunded: boolean;
   cumulativeTax: number;
+  /** Funded/locked/depleted phases over the drawdown years, in order (M6.1 #2). */
+  spans: RunSpan[];
   // earliestNoGapStartAge is NOT here: it is a search over start ages
   // (~60 runs per cell), computed lazily and memoized (gate #E1, metrics.ts).
 }
@@ -459,6 +477,9 @@ export interface DisplayState {
   compareSelection?: Array<{ scenarioId: string; strategyId: string }>;
   /** Delta-table baseline cell (M6). Optional; unset = first selected. */
   compareBaseline?: { scenarioId: string; strategyId: string };
+  /** M6.1 #3b: hidden rows/columns — first-class visibility state. Optional, no migration. */
+  hiddenScenarios?: string[];
+  hiddenStrategies?: string[];
 }
 
 /**

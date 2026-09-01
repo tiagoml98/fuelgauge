@@ -55,6 +55,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | M23 | Retirement income exceeding that year's need is saved to cash (after simple-mode tax) | neutral | M3: surplus is never silently discarded |
 | M24 | Windfalls still land during drawdown years — only *contributions* are cut at the drawdown start | neutral | An inheritance at 70 is an event, not a contribution |
 | M25 | Start-of-year withdrawals mean a 4% draw at 4% real return declines to ~0.91× over 30 years rather than staying flat | conservative (longevity) | This is the Trinity/Bengen convention (year-one draw = 4% of the starting balance), conservative relative to end-of-year timing; the engine matches the closed form b′ = (b − spend) × (1+r_real) to the cent |
+| M26 | A gap year is **locked** when inaccessible assets (ATE terms, end of year) ≥ the unmet need, else **depleted**. Money sitting in accounts the strategy's withdrawal order never touches counts as *depleted*, not locked — the order is the user's choice, not an access rule | neutral (definitional) | M6.1: drives the amber-vs-red gap shading, span summaries ("funded 44–50 · locked out 51–59 · depleted 84+"), and the bridge's "N locked years" count |
 
 ## 3. Out of scope — never modeled (SPEC §11)
 

@@ -95,7 +95,7 @@ export function GrowthChart({
     };
   }, []);
 
-  const { option, markerArtifact } = useMemo(() => {
+  const { option, markerArtifact, seriesNames } = useMemo(() => {
     const seriesDefs = display.byBuckets
       ? BUCKET_ORDER.map((b) => ({
           name: BUCKET_LABELS[b],
@@ -163,13 +163,31 @@ export function GrowthChart({
       .map(([x, { kinds }]) => ({ x, kind: KIND_PRIORITY.find((k) => kinds.includes(k)) ?? kinds[0] }))
       .sort((p, q) => p.x - q.x);
 
-    // Contiguous gap-year bands for the run variant's shading
-    const gapRanges: Array<[{ xAxis: number }, { xAxis: number }]> = [];
+    // Contiguous gap-year bands, split by kind (M6.1 #2): locked = amber
+    // (recoverable — the bridge problem), depleted = red (nothing left)
+    const gapRanges: Array<[{ xAxis: number; itemStyle: { color: string } }, { xAxis: number }]> = [];
+    let lastKind: string | null = null;
     for (const y of years) {
-      if (!y.gap) continue;
+      if (!y.gap) {
+        lastKind = null;
+        continue;
+      }
+      const kind = y.gapKind ?? 'depleted';
       const last = gapRanges[gapRanges.length - 1];
-      if (last && last[1].xAxis === y.age - 1 + 0.5) last[1] = { xAxis: y.age + 0.5 };
-      else gapRanges.push([{ xAxis: y.age - 0.5 }, { xAxis: y.age + 0.5 }]);
+      if (last && lastKind === kind && last[1].xAxis === y.age - 1 + 0.5) {
+        last[1] = { xAxis: y.age + 0.5 };
+      } else {
+        gapRanges.push([
+          {
+            xAxis: y.age - 0.5,
+            itemStyle: {
+              color: kind === 'locked' ? 'rgba(236, 131, 90, 0.14)' : 'rgba(208, 59, 59, 0.12)',
+            },
+          },
+          { xAxis: y.age + 0.5 },
+        ]);
+      }
+      lastKind = kind;
     }
 
     const option = {
@@ -281,6 +299,11 @@ export function GrowthChart({
         symbol: 'none',
         data: s.values,
         color: s.color,
+        // M6.1 #1: accounts mode steps between adjacent years — transfers
+        // (rollovers) render as a clean vertical handoff, never a multi-year
+        // diagonal. Buckets mode stays smooth: it charts the four AGGREGATE
+        // bucket series, so intra-bucket rollovers are structurally invisible.
+        ...(display.byBuckets ? {} : { step: 'end' as const }),
         // 2px surface-colored boundary = the spacer between stacked fills
         lineStyle: { width: 2, color: chrome.surface },
         areaStyle: { color: s.color, opacity: 1 },
@@ -291,23 +314,23 @@ export function GrowthChart({
               // run variant: shade gap years (status-critical wash, labeled in tooltip)
               ...(variant === 'run' && gapRanges.length > 0
                 ? {
-                    markArea: {
-                      silent: true,
-                      itemStyle: { color: 'rgba(208, 59, 59, 0.09)' },
-                      data: gapRanges,
-                    },
+                    markArea: { silent: true, data: gapRanges },
                   }
                 : {}),
             }
           : {}),
       })),
     };
-    return { option, markerArtifact };
+    return { option, markerArtifact, seriesNames: seriesDefs.map((s) => s.name) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [years, a, display, mode, variant]);
 
   return (
-    <div ref={wrapRef} data-markers={JSON.stringify(markerArtifact)}>
+    <div
+      ref={wrapRef}
+      data-markers={JSON.stringify(markerArtifact)}
+      data-series={JSON.stringify(seriesNames)}
+    >
       <ReactECharts ref={chartRef} option={option} style={{ height: 420 }} notMerge autoResize={false} theme={undefined} />
     </div>
   );

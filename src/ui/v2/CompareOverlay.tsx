@@ -91,8 +91,9 @@ export function CompareOverlay({
         textStyle: { color: chrome.inkPrimary, fontSize: 11 },
         valueFormatter: (v: number) => fmtMoney(v),
       },
+      // M6.1 #5: a lone run is just a curve — no baseline tag, no crossovers
       series: runs.map((r, i) => ({
-        name: r.label + (r.isBaseline ? ' (baseline)' : ''),
+        name: r.label + (runs.length >= 2 && r.isBaseline ? ' (baseline)' : ''),
         type: 'line' as const,
         symbol: 'none',
         data: r.run.years.map((y, j) => [y.age, lensValue(r.run, j)]),

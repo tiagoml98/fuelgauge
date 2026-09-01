@@ -6,7 +6,7 @@
  */
 
 import { timingExponent, toReal } from '../../engine/schedule';
-import type { Assumptions, BridgeReport, RunResult } from '../../engine/types';
+import type { Assumptions, BridgeReport, RunResult, RunSpan } from '../../engine/types';
 
 export interface LensedBridge extends BridgeReport {
   lensLabel: string;
@@ -39,26 +39,39 @@ export interface RunTiles {
   lifetimeAfterTaxSpending: number;
   terminalAte: number;
   cumulativeTax: number;
-  /** null = gaps from the very start; 'horizon' = never gaps. */
-  fundedThrough: number | 'horizon' | null;
+  /** Funded/locked/depleted phases (M6.1 #2 — replaces the single funded-through number). */
+  spans: RunSpan[];
   lensLabel: string;
+}
+
+/**
+ * "funded 44–50 · locked out 51–59 · funded 60–83 · depleted 84+", collapsing
+ * to "funded through 90 ✓" when clean (M6.1 #2).
+ */
+export function formatSpans(spans: RunSpan[], horizonAge: number): string {
+  if (spans.length === 0) return '—';
+  if (spans.length === 1 && spans[0].kind === 'funded') return `funded through ${horizonAge} ✓`;
+  return spans
+    .map((s) => {
+      const range = s.to >= horizonAge ? `${s.from}+` : `${s.from}–${s.to}`;
+      return s.kind === 'funded'
+        ? `funded ${range}`
+        : s.kind === 'locked'
+          ? `locked out ${range}`
+          : `depleted ${range}`;
+    })
+    .join(' · ');
 }
 
 export function runTiles(run: RunResult, a: Assumptions, real: boolean): RunTiles {
   const startAge = run.years[0]?.age ?? 0;
   const s = run.summary;
-  const fundedThrough =
-    s.firstGapAge === null
-      ? ('horizon' as const)
-      : s.firstGapAge <= run.drawdownStartAge
-        ? null
-        : s.firstGapAge - 1;
   if (!real) {
     return {
       lifetimeAfterTaxSpending: s.lifetimeAfterTaxSpending,
       terminalAte: s.terminalAte,
       cumulativeTax: s.cumulativeTax,
-      fundedThrough,
+      spans: s.spans,
       lensLabel: 'nominal',
     };
   }
@@ -78,7 +91,7 @@ export function runTiles(run: RunResult, a: Assumptions, real: boolean): RunTile
     lifetimeAfterTaxSpending: lifetime,
     terminalAte: toReal(s.terminalAte, (run.years[run.years.length - 1]?.age ?? startAge) - startAge, a.inflation),
     cumulativeTax: tax,
-    fundedThrough,
+    spans: s.spans,
     lensLabel: "today's $",
   };
 }

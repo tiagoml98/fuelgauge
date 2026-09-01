@@ -73,6 +73,46 @@ describe('locked money (SPEC §12)', () => {
     // r = 0: the $800k pot nets exactly 800k × 0.88 of lifetime spending, then gaps resume
     expect(run.summary.lifetimeAfterTaxSpending).toBeCloseTo(800_000 * 0.88, 2);
   });
+
+  it('gap kinds + spans (M6.1 #2): locked while the pot exists, depleted once it is gone', () => {
+    // pre-60 gaps: the 800k trad 401k dwarfs the 40k unmet need → locked
+    for (let age = 45; age <= 59; age++) expect(rowAt(run.years, age).gapKind).toBe('locked');
+    // 704k net funds 60–76 (17 full years); the pot dies mid-77 → depleted
+    expect(rowAt(run.years, 77).gapKind).toBe('depleted');
+    expect(run.summary.spans).toEqual([
+      { kind: 'locked', from: 45, to: 59 },
+      { kind: 'funded', from: 60, to: 76 },
+      { kind: 'depleted', from: 77, to: 90 },
+    ]);
+  });
+});
+
+describe('funded → locked → funded (M6.1 #2): lifetime spending counts BOTH sides', () => {
+  // 80k cash covers 45–46, then everything left is the locked 401k until 60
+  const a = makeA((x) => {
+    x.filers = [{ currentAge: 44 }];
+    x.balances.perFiler[0].trad401k = 800_000;
+    x.balances.cash = 80_000;
+  });
+  const w = makeW((x) => {
+    x.drawdownStartAge = 45;
+    x.spending = flat(40_000);
+  });
+  const run = simulateRun(a, makeG(), w);
+
+  it('spans: funded 45–46 · locked 47–59 · funded 60–76 · depleted 77+', () => {
+    expect(run.summary.spans).toEqual([
+      { kind: 'funded', from: 45, to: 46 },
+      { kind: 'locked', from: 47, to: 59 },
+      { kind: 'funded', from: 60, to: 76 },
+      { kind: 'depleted', from: 77, to: 90 },
+    ]);
+  });
+
+  it('lifetime spending = cash years + post-access years, not just up to the first gap', () => {
+    // 80,000 (both cash years, pre-lock) + 800,000 × 0.88 (after access) — to the cent
+    expect(run.summary.lifetimeAfterTaxSpending).toBeCloseTo(80_000 + 800_000 * 0.88, 2);
+  });
 });
 
 describe('rule of 55 (SPEC §12)', () => {

@@ -34,6 +34,7 @@ import type {
   GrowthScenario,
   MarkerEvent,
   RunResult,
+  RunSpan,
   RunYear,
   WithdrawalStrategy,
 } from './types';
@@ -302,7 +303,22 @@ export function simulateRun(
     row.withdrawals = withdrawals;
     row.gap = gap;
     Object.assign(row, accessibleAte(ctx, t, access));
+    if (row.gap) {
+      // M6.1 #2: locked = the money exists but can't be touched yet;
+      // depleted = there is nothing left to touch
+      row.gapKind = row.locked >= (row.unmet ?? 0) - 0.005 ? 'locked' : 'depleted';
+    }
     years.push(row);
+  }
+
+  // Funded/locked/depleted spans over the drawdown years (M6.1 #2)
+  const spans: RunSpan[] = [];
+  for (const y of years) {
+    if (y.need === undefined) continue;
+    const kind: RunSpan['kind'] = !y.gap ? 'funded' : (y.gapKind ?? 'depleted');
+    const last = spans[spans.length - 1];
+    if (last && last.kind === kind && last.to === y.age - 1) last.to = y.age;
+    else spans.push({ kind, from: y.age, to: y.age });
   }
 
   const result: RunResult = {
@@ -317,6 +333,7 @@ export function simulateRun(
       firstGapAge,
       bridgeFunded: false,
       cumulativeTax: ctx.cumulativeTax,
+      spans,
     },
   };
   // Bridge funded ⇔ no gap year between D and the latest access age

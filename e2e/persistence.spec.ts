@@ -135,6 +135,8 @@ function maximalState(): PersistedState {
     name: 'Retire at 55',
     drawdownStartAge: 55,
     spending: [{ fromAge: 0, toAge: null, value: 60_000 }],
+    medical: [{ fromAge: 65, toAge: null, value: 8_000 }], // M6.2 #2 round-trip
+
     oneTimeExpenses: [{ age: 60, amount: 30_000, label: 'roof' }],
     income: [{ kind: 'socialSecurity', fromAge: 67, toAge: null, amount: 28_000, label: 'SS' }],
     order: ['taxable', 'cash', 'preTax', 'rothBasis', 'seasonedConversions', 'rothEarnings'],

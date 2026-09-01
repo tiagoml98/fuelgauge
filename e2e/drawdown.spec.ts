@@ -75,6 +75,51 @@ test('buckets mode charts the 4 aggregate bucket series; accounts mode charts pe
   expect(accounts).toContain('Traditional IRA');
 });
 
+test('HSA last resort (M6.2 #2): pot dies at 83, the HSA funds 83–88, depleted only at HSA zero', async ({ page }) => {
+  const s = drawdownState('locked');
+  s.assumptions.filers = [{ currentAge: 64 }];
+  s.assumptions.balances.perFiler[0].trad401k = (40_000 / 0.88) * 18; // funds exactly 65–82
+  s.assumptions.balances.perFiler[0].hsa = 300_000;
+  s.assumptions.returnSchedule = [{ fromAge: 0, toAge: null, value: 0 }];
+  s.assumptions.returnOverrides = { cash: [{ fromAge: 0, toAge: null, value: 0 }] };
+  s.assumptions.fees = 0;
+  s.assumptions.dividendYield = 0;
+  s.assumptions.indexWithInflation = false;
+  s.strategies[0] = { ...s.strategies[0], drawdownStartAge: 65, order: ['preTax'] };
+  s.display = { ...s.display, real: false };
+  await loadState(page, s);
+  await expect(page.getByTestId('funding-spans')).toContainText('funded 65–88 · depleted 89+');
+  // the year-83 balance-table row shows the taxed HSA draw, not a gap
+  await page.getByRole('button', { name: 'yearly' }).click();
+  await expect(page.locator('tr[data-age="83"]')).toContainText(fmt(40_000 / 0.88));
+  await expect(page.locator('[data-gap-age="83"]')).toHaveCount(0);
+  await expect(page.locator('[data-gap-age="89"]')).toContainText('GAP');
+});
+
+test('medical slice editor: entered amount pays from the HSA first, tax-free at 45 (M6.2 #2)', async ({ page }) => {
+  const s = drawdownState('locked');
+  s.assumptions.balances.perFiler[0].hsa = 100_000;
+  s.assumptions.balances.cash = 900_000;
+  s.assumptions.returnOverrides = { cash: [{ fromAge: 0, toAge: null, value: 0 }] }; // no interest tax noise
+  s.strategies[0] = { ...s.strategies[0], order: ['cash'] };
+  s.display = { ...s.display, real: false, yearlyTable: true };
+  await loadState(page, s);
+  await commitInput(page, 'of which medical amount', '10000');
+  const state = await readState(page);
+  expect(state.strategies.find((w) => w.id === 'locked')?.medical).toEqual([
+    { fromAge: 45, toAge: null, value: 10_000 }, // simple mode anchors at the visible start age
+  ]);
+  // year 45 (age < 65!): 10k from the HSA tax-free + 30k cash — no gap, no tax
+  const run = simulateRun(state.assumptions, state.growthScenarios[0], state.strategies[0]);
+  const y45 = run.years.find((y) => y.age === 45)!;
+  expect(y45.withdrawals?.hsa).toBeCloseTo(10_000, 2);
+  expect(y45.withdrawals?.cash).toBeCloseTo(30_000, 2);
+  expect(y45.taxPaidThisYear).toBeCloseTo(0, 2);
+  // and the rendered table row carries the same withdrawn total
+  await expect(page.locator('tr[data-age="45"]')).toContainText(fmt(40_000));
+  await expect(page.locator('[data-gap-age="45"]')).toHaveCount(0);
+});
+
 test('drawdown-start and access-age markers render at N − 0.5 (gate requirement)', async ({ page }) => {
   await loadState(page, drawdownState('locked'));
   const markers = JSON.parse(

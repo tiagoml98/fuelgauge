@@ -87,6 +87,104 @@ describe('locked money (SPEC §12)', () => {
   });
 });
 
+describe('HSA drawdown under medical treatment (M6.2 #2)', () => {
+  // r = 0 everywhere, effective rate 12%: the 818,181.82 pre-tax pot funds
+  // exactly 18 years (65–82) at 40k net (45,454.55 gross). At 83 everything
+  // else is gone — the $300k HSA takes over as LAST RESORT, taxed at 12%
+  // (≥ 65, no penalty): 45,454.55/yr funds 83–88, partial 89, empty at 90.
+  const shapeA = () =>
+    makeA((x) => {
+      x.filers = [{ currentAge: 64 }];
+      x.balances.perFiler[0].trad401k = (40_000 / 0.88) * 18;
+      x.balances.perFiler[0].hsa = 300_000;
+      x.hsaTreatment = 'medical';
+    });
+  const w40k = makeW((x) => {
+    x.drawdownStartAge = 65;
+    x.spending = flat(40_000);
+  });
+
+  it("the user's shape: everything else gone at 83 → HSA funds beyond, depleted only at HSA zero", () => {
+    const run = simulateRun(shapeA(), makeG(), w40k);
+    // 83: first HSA year — taxed draw, no gap
+    const y83 = rowAt(run.years, 83);
+    expect(y83.gap).toBe(false);
+    expect(y83.withdrawals?.hsa).toBeCloseTo(40_000 / 0.88, 2);
+    expect(y83.taxPaidThisYear).toBeCloseTo((40_000 / 0.88) * 0.12, 2);
+    // HSA: 300,000 − 6 × 45,454.55 = 27,272.73 left entering 89 → partial year
+    const y89 = rowAt(run.years, 89);
+    expect(y89.gap).toBe(true);
+    expect(y89.withdrawals?.hsa).toBeCloseTo(27_272.73, 0); // drained to zero
+    expect(rowAt(run.years, 89).accounts.hsa.balance).toBeCloseTo(0, 2);
+    // depleted ONLY when the HSA is also empty
+    expect(run.summary.spans).toEqual([
+      { kind: 'funded', from: 65, to: 88 },
+      { kind: 'depleted', from: 89, to: 90 },
+    ]);
+  });
+
+  it('without the HSA the same run reads depleted 83+ — the fix is exactly the difference', () => {
+    const a = shapeA();
+    a.balances.perFiler[0].hsa = 0;
+    const run = simulateRun(a, makeG(), w40k);
+    expect(run.summary.spans).toEqual([
+      { kind: 'funded', from: 65, to: 82 },
+      { kind: 'depleted', from: 83, to: 90 },
+    ]);
+  });
+
+  it('medical slice: paid from the HSA first, tax-free at ANY age; rest walks the order', () => {
+    const a = makeA((x) => {
+      x.filers = [{ currentAge: 44 }];
+      x.balances.cash = 1_000_000;
+      x.balances.perFiler[0].hsa = 100_000;
+      x.hsaTreatment = 'medical';
+    });
+    const w = makeW((x) => {
+      x.drawdownStartAge = 45;
+      x.spending = flat(40_000);
+      x.medical = flat(10_000);
+    });
+    const y45 = rowAt(simulateRun(a, makeG(), w).years, 45);
+    expect(y45.withdrawals?.hsa).toBeCloseTo(10_000, 4); // tax-free at 45
+    expect(y45.withdrawals?.cash).toBeCloseTo(30_000, 4);
+    expect(y45.taxPaidThisYear).toBeCloseTo(0, 4);
+  });
+
+  it('last resort before 65 pays ordinary rate + 20% penalty: net X costs X ÷ 0.68', () => {
+    const a = makeA((x) => {
+      x.filers = [{ currentAge: 49 }];
+      x.balances.perFiler[0].hsa = 500_000;
+      x.hsaTreatment = 'medical';
+    });
+    const w = makeW((x) => {
+      x.drawdownStartAge = 50;
+      x.spending = flat(34_000);
+    });
+    const y50 = rowAt(simulateRun(a, makeG(), w).years, 50);
+    expect(y50.gap).toBe(false);
+    expect(y50.withdrawals?.hsa).toBeCloseTo(34_000 / 0.68, 2);
+    expect(y50.taxPaidThisYear).toBeCloseTo((34_000 / 0.68) * 0.32, 2);
+  });
+
+  it('identity: medical absent ≡ medical [] ≡ medical 0 (and HSA 0 runs are byte-identical)', () => {
+    const a = makeA((x) => {
+      x.filers = [{ currentAge: 64 }];
+      x.balances.perFiler[0].trad401k = 500_000;
+      x.hsaTreatment = 'medical';
+    });
+    const wAbsent = makeW((x) => {
+      x.drawdownStartAge = 65;
+      x.spending = flat(40_000);
+    });
+    const wEmpty = { ...wAbsent, medical: [] };
+    const wZero = { ...wAbsent, medical: flat(0) };
+    const base = simulateRun(a, makeG(), wAbsent);
+    expect(simulateRun(a, makeG(), wEmpty)).toEqual(base);
+    expect(simulateRun(a, makeG(), wZero)).toEqual(base);
+  });
+});
+
 describe('funded → locked → funded (M6.1 #2): lifetime spending counts BOTH sides', () => {
   // 80k cash covers 45–46, then everything left is the locked 401k until 60
   const a = makeA((x) => {

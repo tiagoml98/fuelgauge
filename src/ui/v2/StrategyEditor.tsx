@@ -152,6 +152,14 @@ export function StrategyEditor({
           startAge={startAge}
           endAge={a.horizonAge}
         />
+        <ScheduleControl
+          label="of which medical"
+          description="part of spending, not added to it — paid from the HSA first, tax-free at any age; tends to rise with age"
+          rows={w.medical ?? []}
+          onChange={(rows) => patch({ medical: rows })}
+          startAge={startAge}
+          endAge={a.horizonAge}
+        />
         <div className="py-2">
           <span className="text-[13px] font-medium text-neutral-800 dark:text-neutral-200">One-time expenses</span>
           <p className="text-xs text-neutral-500">today's dollars, indexed — a roof, a wedding, a sabbatical</p>

@@ -81,6 +81,9 @@ export const SUPER_CATCH_UP_FROM = 60;
 export const SUPER_CATCH_UP_TO = 63;
 export const HSA_CATCH_UP_AGE = 55;
 export const HSA_CONTRIBUTION_STOP_AGE = 65;
+/** M6.2 #2: nonqualified HSA withdrawals before 65 pay this on top of ordinary income. */
+export const HSA_NONQUALIFIED_PENALTY = 0.2;
+export const HSA_PENALTY_ENDS_AGE = 65;
 
 // ---------------------------------------------------------------------------
 // Access rules (SPEC §2, consumed by access.ts in M3)

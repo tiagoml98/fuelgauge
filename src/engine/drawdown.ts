@@ -5,11 +5,20 @@
  * taxable sales taxed on the gain portion, trad-IRA nondeductible basis
  * recovered pro rata (gate #11). Shortfall ⇒ gap — reported, never covered;
  * balances never go negative (SPEC §6).
+ *
+ * M6.2 #2, HSA under "medical" treatment:
+ * (a) the medical slice of need is paid from the HSA FIRST, tax-free at any
+ *     age, until the HSA is exhausted; the rest of need walks the order;
+ * (b) LAST RESORT — need the order could not cover draws from the HSA:
+ *     tax-free up to the year's remaining medical slice, beyond that as
+ *     ordinary income at the effective (+state) rate plus the 20% penalty
+ *     while that filer's end-of-year age < 65. A year gaps only when the HSA
+ *     is also empty.
  */
 
 import { accessOpen, rothEarningsOpen } from './access';
 import { rothIraTotal, type FilerState, type SimContext } from './accumulate';
-import { ROTH_SEASONING_YEARS } from './defaults';
+import { HSA_NONQUALIFIED_PENALTY, HSA_PENALTY_ENDS_AGE, ROTH_SEASONING_YEARS } from './defaults';
 import { grossFromNet, preTaxWithdrawalRate, taxableSaleRate } from './tax';
 import type { AccessMap, AccountId, WithdrawalSource } from './types';
 
@@ -30,6 +39,8 @@ export function withdrawYear(
   netNeed: number,
   order: WithdrawalSource[],
   access: AccessMap,
+  /** This year's medical slice of the net need (already indexed), M6.2 #2. */
+  medicalNeed = 0,
 ): WithdrawResult {
   const { a } = ctx;
   const year = a.currentYear + t;
@@ -44,6 +55,22 @@ export function withdrawYear(
   const record = (id: AccountId, gross: number) => {
     withdrawals[id] = (withdrawals[id] ?? 0) + gross;
   };
+
+  // (a) qualified pass: the medical slice comes out of the HSA first,
+  // tax-free at any age. Whatever the HSA cannot cover rejoins the order.
+  let qualifiedLeft = a.hsaTreatment === 'medical' ? Math.min(medicalNeed, remaining) : 0;
+  if (qualifiedLeft > EPS) {
+    for (const s of ctx.filers) {
+      if (qualifiedLeft <= EPS) break;
+      const w = Math.min(s.hsa, qualifiedLeft);
+      if (w > 0) {
+        s.hsa -= w;
+        qualifiedLeft -= w;
+        remaining -= w;
+        record('hsa', w);
+      }
+    }
+  }
 
   /** Draw up to `remaining` net from a balance where `taxableFrac` of gross is taxed. */
   const drawTaxed = (balance: number, basis: number, rate: number): { gross: number; net: number } => {
@@ -174,6 +201,32 @@ export function withdrawYear(
           }
         }
         break;
+      }
+    }
+  }
+
+  // (b) last resort: every ordered source is exhausted or locked — the HSA
+  // covers what it can before the year is allowed to gap.
+  if (a.hsaTreatment === 'medical' && remaining > EPS) {
+    for (let f = 0; f < ctx.filers.length && remaining > EPS; f++) {
+      const s = ctx.filers[f];
+      if (s.hsa <= EPS) continue;
+      // any unused qualified capacity first (tax-free)
+      const freeNet = Math.min(remaining, qualifiedLeft, s.hsa);
+      if (freeNet > 0) {
+        s.hsa -= freeNet;
+        qualifiedLeft -= freeNet;
+        remaining -= freeNet;
+        record('hsa', freeNet);
+      }
+      if (remaining <= EPS || s.hsa <= EPS) continue;
+      // nonqualified: ordinary income (+ state), +20% penalty before 65
+      const penalty = ages[f] < HSA_PENALTY_ENDS_AGE ? HSA_NONQUALIFIED_PENALTY : 0;
+      const rate = Math.min(preTaxRate + penalty, 0.99);
+      const { gross } = drawTaxed(s.hsa, 0, rate);
+      if (gross > 0) {
+        s.hsa -= gross;
+        record('hsa', gross);
       }
     }
   }

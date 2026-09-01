@@ -330,6 +330,13 @@ export interface WithdrawalStrategy {
   drawdownStartAge?: number;
   /** Today's $/yr. */
   spending: ScheduleRow[];
+  /**
+   * M6.2 #2: the medical SLICE of spending (today's $/yr, part of — not added
+   * to — `spending`). Each drawdown year this slice is paid from the HSA
+   * first, tax-free at any age, until the HSA is exhausted. Optional; absent
+   * or empty = 0.
+   */
+  medical?: ScheduleRow[];
   oneTimeExpenses: OneTimeRow[];
   income: IncomeRow[];
   order: WithdrawalSource[];

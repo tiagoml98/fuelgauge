@@ -137,6 +137,8 @@ export function simulateRun(
     timing: 'startOfYear' as const,
   };
   const spending = resolveSchedule(w.spending, startOpts);
+  // M6.2 #2: the medical SLICE of spending — paid from the HSA first
+  const medical = resolveSchedule(w.medical ?? [], startOpts);
   const oneTime = resolveOneTime(w.oneTimeExpenses, startOpts);
   // Income rows are additive streams — one row, one source (no overlap rule).
   const incomeRows = w.income.map((r) => ({
@@ -251,7 +253,9 @@ export function simulateRun(
         netNeed = 0;
       }
 
-      const result = withdrawYear(ctx, t, netNeed, w.order, access);
+      // income offsets the non-medical share first — the medical slice keeps
+      // its tax-free HSA claim (M6.2 #2, noted in ASSUMPTIONS M10)
+      const result = withdrawYear(ctx, t, netNeed, w.order, access, Math.min(medical[t], netNeed));
       taxPaid += result.taxPaid;
       need = netNeed;
       grossNeedOut = grossNeed;

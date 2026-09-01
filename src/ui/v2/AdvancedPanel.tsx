@@ -14,6 +14,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { useMemo } from 'react';
+import { coastFireAge } from '../../engine/metrics';
 import { toReal } from '../../engine/schedule';
 import type {
   AccountId,
@@ -61,6 +63,30 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
     });
   const startAge = a.filers[0].currentAge;
   const cashReturn = a.returnOverrides.cash?.[0]?.value ?? 0.04;
+
+  // M6.2 #3: live sensitivity on the two biggest levers
+  const sensitivity = useMemo(() => {
+    const shifted = (delta: number) => ({
+      ...a,
+      returnSchedule: a.returnSchedule.map((r) => ({ ...r, value: r.value + delta })),
+    });
+    let coast: string | null = null;
+    try {
+      const base = coastFireAge(a, g);
+      const up = coastFireAge(shifted(0.01), g);
+      const down = coastFireAge(shifted(-0.01), g);
+      if (base !== null && up !== null && down !== null) {
+        const n = Math.max(Math.abs(base - up), Math.abs(down - base));
+        coast = `±1% return moves Coast FIRE by ~${n} year${n === 1 ? '' : 's'} (now ${base} · −1% → ${down} · +1% → ${up})`;
+      }
+    } catch {
+      coast = null; // no FIRE target / unreachable — nothing honest to say
+    }
+    const tRet = a.effectiveRetirementRate + a.stateTaxRate;
+    const swing = Math.round((0.05 / (1 - tRet)) * 1000) / 10;
+    const rate = `±5 points here move your traditional-vs-Roth result by ±${swing}% — each pre-tax dollar nets ${Math.round((1 - tRet) * 100)}¢ at withdrawal`;
+    return { coast, rate };
+  }, [a, g]);
 
   return (
     <div>
@@ -339,9 +365,36 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
         </Button>
       </Group>
 
+      {/* M6.2 #3: the levers that move the answer, separated from reference data */}
+      <div className="pt-4" data-testid="section-levers">
+        <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+          Assumptions worth questioning
+        </h2>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          the handful of numbers that move the answer — question these before trusting any result
+        </p>
+        {sensitivity.coast && (
+          <p className="mt-1.5 rounded-md bg-neutral-50 px-2 py-1 text-xs leading-5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300" data-testid="sensitivity-return">
+            {sensitivity.coast}
+          </p>
+        )}
+        <p className="mt-1.5 rounded-md bg-neutral-50 px-2 py-1 text-xs leading-5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300" data-testid="sensitivity-rate">
+          {sensitivity.rate}
+        </p>
+      </div>
+
       <Group title="Returns & fees">
+        <ScheduleControl
+          label="Investment return"
+          description="every point compounds over the whole horizon — the single biggest lever (also editable in Basics)"
+          rows={a.returnSchedule}
+          onChange={(rows) => patchA({ returnSchedule: rows })}
+          startAge={startAge}
+          endAge={a.horizonAge}
+          unit="percent"
+        />
         <FieldRow label="Cash return" description="cash always uses its own return — never fees, never overrides" control={<PercentInput value={cashReturn} onCommit={(v) => patchA({ returnOverrides: { ...a.returnOverrides, cash: [{ fromAge: 0, toAge: null, value: v }] } })} aria-label="Cash return" />} />
-        <FieldRow label="Fees / expense ratio" description="subtracted from invested accounts only" control={<PercentInput value={a.fees} onCommit={(v) => patchA({ fees: v })} aria-label="Fees" />} />
+        <FieldRow label="Fees / expense ratio" description="acts exactly like a return cut — 1% of fees cancels 1% of return, forever" control={<PercentInput value={a.fees} onCommit={(v) => patchA({ fees: v })} aria-label="Fees" />} />
         <FieldRow label="Dividend yield" description="taxable drag; after-tax dividends become cost basis" control={<PercentInput value={a.dividendYield} onCommit={(v) => patchA({ dividendYield: v })} aria-label="Dividend yield" />} />
         <FieldRow label="Dividend tax rate" control={<PercentInput value={a.dividendTaxRate} onCommit={(v) => patchA({ dividendTaxRate: v })} aria-label="Dividend tax rate" />} />
         <div className="py-2">
@@ -361,11 +414,60 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       </Group>
 
       <Group title="Taxes (simple mode)">
-        <FieldRow label="Marginal rate now" control={<PercentInput value={a.marginalRateNow} onCommit={(v) => patchA({ marginalRateNow: v })} aria-label="Marginal rate" />} />
-        <FieldRow label="Effective retirement rate" description="on pre-tax withdrawals — deliberately labeled effective, not marginal" control={<PercentInput value={a.effectiveRetirementRate} onCommit={(v) => patchA({ effectiveRetirementRate: v })} aria-label="Effective rate" />} />
+        <FieldRow label="Marginal rate now" description="prices every deferred dollar today — the traditional side of the rate arbitrage" control={<PercentInput value={a.marginalRateNow} onCommit={(v) => patchA({ marginalRateNow: v })} aria-label="Marginal rate" />} />
+        <FieldRow label="Effective retirement rate" description="prices every pre-tax dollar at withdrawal — deliberately effective, not marginal" control={<PercentInput value={a.effectiveRetirementRate} onCommit={(v) => patchA({ effectiveRetirementRate: v })} aria-label="Effective rate" />} />
         <FieldRow label="LTCG rate" control={<PercentInput value={a.ltcgRate} onCommit={(v) => patchA({ ltcgRate: v })} aria-label="LTCG rate" />} />
         <FieldRow label="Tax mode" description="bracket mode arrives in Phase 2" control={<Select value="simple"><SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="simple">Simple (flat rates)</SelectItem></SelectContent></Select>} />
       </Group>
+
+      <Group title="Horizon, HSA & targets">
+        <FieldRow
+          label="Inflation"
+          description="spending and limits index with it — it compounds against you the way returns compound for you (also in Basics)"
+          control={<PercentInput value={a.inflation} onCommit={(v) => patchA({ inflation: v })} aria-label="Inflation" />}
+        />
+        <FieldRow label="Planning horizon" description="each extra year adds one more indexed year of spending to fund" control={<AgeInput value={a.horizonAge} min={startAge + 1} max={105} onCommit={(v) => patchA({ horizonAge: v })} aria-label="Horizon" />} />
+        <FieldRow label="Safe withdrawal rate" description="divides straight into your FIRE number — 4% = 25× spending, 3% ≈ 33×" control={<PercentInput value={a.safeWithdrawalRate} onCommit={(v) => patchA({ safeWithdrawalRate: v })} aria-label="SWR" />} />
+        <FieldRow label="Coast FIRE target age" control={<AgeInput value={a.coastTargetAge} onCommit={(v) => patchA({ coastTargetAge: v })} aria-label="Coast target age" />} />
+        <FieldRow label="Barista income target" description="assumed part-time income for the Barista metric" control={<MoneyInput value={a.baristaIncomeTarget ?? 0} min={0} onCommit={(v) => patchA({ baristaIncomeTarget: v })} aria-label="Barista income target" />} />
+        <FieldRow
+          label="HSA treatment"
+          control={
+            <Select value={a.hsaTreatment} onValueChange={(v) => patchA({ hsaTreatment: v as Assumptions['hsaTreatment'] })}>
+              <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900">
+                {/* short trigger text; long copy lives in the open menu (no-clipping rule) */}
+                <SelectValue>{a.hsaTreatment === 'medical' ? 'Medical' : 'Non-medical'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="medical">Medical — pays the medical slice, then last resort</SelectItem>
+                <SelectItem value="nonMedical">Non-medical — like pre-tax, opens at 65</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+        <FieldRow
+          label="HSA coverage"
+          control={
+            <Select value={a.hsaCoverage} onValueChange={(v) => patchA({ hsaCoverage: v as Assumptions['hsaCoverage'] })}>
+              <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="selfOnly">Self-only</SelectItem>
+                <SelectItem value="family">Family</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+      </Group>
+
+      {/* M6.2 #3: reference data — IRS numbers and plan facts, rarely touched */}
+      <div className="pt-4" data-testid="section-reference">
+        <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+          Reference &amp; plan rules
+        </h2>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          rarely changed — IRS limits, access ages, and what your plan permits
+        </p>
+      </div>
 
       <Group title="Contribution limits (2026, indexed)">
         {(
@@ -384,40 +486,6 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
         ).map(([key, lbl]) => (
           <FieldRow key={key} label={lbl} control={<MoneyInput value={a.limits[key]} min={0} onCommit={(v) => patchA({ limits: { ...a.limits, [key]: v } })} aria-label={`Limit: ${lbl}`} />} />
         ))}
-      </Group>
-
-      <Group title="Horizon, HSA & targets">
-        <FieldRow label="Planning horizon" control={<AgeInput value={a.horizonAge} min={startAge + 1} max={105} onCommit={(v) => patchA({ horizonAge: v })} aria-label="Horizon" />} />
-        <FieldRow label="Safe withdrawal rate" description="calibrated to ~30 years" control={<PercentInput value={a.safeWithdrawalRate} onCommit={(v) => patchA({ safeWithdrawalRate: v })} aria-label="SWR" />} />
-        <FieldRow label="Coast FIRE target age" control={<AgeInput value={a.coastTargetAge} onCommit={(v) => patchA({ coastTargetAge: v })} aria-label="Coast target age" />} />
-        <FieldRow label="Barista income target" description="assumed part-time income for the Barista metric" control={<MoneyInput value={a.baristaIncomeTarget ?? 0} min={0} onCommit={(v) => patchA({ baristaIncomeTarget: v })} aria-label="Barista income target" />} />
-        <FieldRow
-          label="HSA treatment"
-          control={
-            <Select value={a.hsaTreatment} onValueChange={(v) => patchA({ hsaTreatment: v as Assumptions['hsaTreatment'] })}>
-              <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900">
-                {/* short trigger text; long copy lives in the open menu (no-clipping rule) */}
-                <SelectValue>{a.hsaTreatment === 'medical' ? 'Medical' : 'Non-medical'}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="medical">Medical — face value, never auto-drawn</SelectItem>
-                <SelectItem value="nonMedical">Non-medical — like pre-tax, opens at 65</SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
-        <FieldRow
-          label="HSA coverage"
-          control={
-            <Select value={a.hsaCoverage} onValueChange={(v) => patchA({ hsaCoverage: v as Assumptions['hsaCoverage'] })}>
-              <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="selfOnly">Self-only</SelectItem>
-                <SelectItem value="family">Family</SelectItem>
-              </SelectContent>
-            </Select>
-          }
-        />
       </Group>
 
       <Group title="Plan toggles & access overrides">

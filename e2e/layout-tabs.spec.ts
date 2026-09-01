@@ -1,6 +1,6 @@
 /** Tab render states, panel resize, truncation rules, Advanced tier. */
 
-import { exampleState, expect, expectNoTruncation, loadState, readState, test } from './fixtures';
+import { commitInput, exampleState, expect, expectNoTruncation, loadState, readState, test } from './fixtures';
 
 test('empty state renders the first-run nudge, no chart, disabled tabs', async ({ page }) => {
   await page.goto('/');
@@ -112,6 +112,46 @@ test('Advanced tier shows every group and persists the tier choice', async ({ pa
   }
   expect((await readState(page)).display.inputsTier).toBe('advanced');
   await expectNoTruncation(page, 'inputs-panel');
+});
+
+test('Advanced sections: levers vs reference, live sensitivity hints machine-checked (M6.2 #3)', async ({ page }) => {
+  const state = exampleState('spotcheck');
+  state.assumptions.fireSpendingTarget = 40_000;
+  state.display = { ...state.display, inputsTier: 'advanced' };
+  await loadState(page, state);
+
+  // two labeled sections, reference marked rarely-changed and collapsed
+  await expect(page.getByTestId('section-levers')).toContainText('Assumptions worth questioning');
+  await expect(page.getByTestId('section-reference')).toContainText('rarely changed');
+  await expect(page.getByLabel('Limit: 401k deferral', { exact: true })).toHaveCount(0); // collapsed
+  await page.getByText('Contribution limits (2026, indexed)').click();
+  await expect(page.getByLabel('Limit: 401k deferral', { exact: true })).toBeVisible();
+
+  // sensitivity hints: the rendered numbers must equal the engine's
+  const a = state.assumptions;
+  const { coastFireAge } = await import('../src/engine/metrics');
+  const shifted = (d: number) => ({
+    ...a,
+    returnSchedule: a.returnSchedule.map((r) => ({ ...r, value: r.value + d })),
+  });
+  const base = coastFireAge(a, state.growthScenarios[0])!;
+  const up = coastFireAge(shifted(0.01), state.growthScenarios[0])!;
+  const down = coastFireAge(shifted(-0.01), state.growthScenarios[0])!;
+  const n = Math.max(Math.abs(base - up), Math.abs(down - base));
+  await expect(page.getByTestId('sensitivity-return')).toHaveText(
+    `±1% return moves Coast FIRE by ~${n} year${n === 1 ? '' : 's'} (now ${base} · −1% → ${down} · +1% → ${up})`,
+  );
+  const tRet = a.effectiveRetirementRate + a.stateTaxRate;
+  const swing = Math.round((0.05 / (1 - tRet)) * 1000) / 10;
+  await expect(page.getByTestId('sensitivity-rate')).toContainText(
+    `±5 points here move your traditional-vs-Roth result by ±${swing}%`,
+  );
+
+  // the hint is live: raising the effective rate reprices the swing
+  await page.getByText('Taxes (simple mode)').click();
+  await commitInput(page, 'Effective rate', '20');
+  const swing20 = Math.round((0.05 / (1 - (0.2 + a.stateTaxRate))) * 1000) / 10;
+  await expect(page.getByTestId('sensitivity-rate')).toContainText(`±${swing20}%`);
 });
 
 test('two filers: adding filer 2 aligns state and offers the HSA family switch', async ({ page }) => {

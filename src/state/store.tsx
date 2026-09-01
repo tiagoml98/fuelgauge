@@ -8,7 +8,7 @@
 import {
   createContext,
   useContext,
-  useEffect,
+  useLayoutEffect,
   useReducer,
   useRef,
   type Dispatch,
@@ -287,11 +287,18 @@ const StoreContext = createContext<{ state: PersistedState; dispatch: Dispatch<A
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadInitialState);
 
-  // Debounced URL-hash writeback — the URL always holds the full state
+  // Debounced URL-hash writeback — the URL always holds the full state.
+  // Layout effect + the data-hash-pending flag give tests a real quiescence
+  // signal (set synchronously with the change, cleared when the write lands)
+  // instead of guessing from hash-stability timing.
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => {
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute('data-hash-pending', '');
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => writeHash(state), 300);
+    timer.current = setTimeout(() => {
+      writeHash(state);
+      document.documentElement.removeAttribute('data-hash-pending');
+    }, 300);
     return () => clearTimeout(timer.current);
   }, [state]);
 

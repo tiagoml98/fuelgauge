@@ -11,6 +11,11 @@ errors/warnings after every interaction** or the test fails. `PS:maximal` = the 
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
 user-visible outcomes (positions, rendered text) from real pointer/keyboard input.
+State reads are deterministic: the store raises `data-hash-pending` synchronously with every
+change and clears it when the debounced hash write lands; `readState` waits on that flag —
+never on hash-stability timing. The suite runs against its own strict-port dev server
+(playwright.config webServer, port 5199, `reuseExistingServer: false`) so an ambient or stale
+server can never be silently reused.
 
 ## 1. PersistedState fields (schema v1) — 65/65
 
@@ -104,7 +109,8 @@ table/tooltip/bridge equality).
 | Panel resize handle — divider tracks the cursor within px during a REAL drag; min clamp; saved-width render | LT:divider-drag |
 | Independent column scrolling (page never scrolls) | LT:scroll-independence |
 | Basics collapsible sections (shared Group, persisted collapse) | PO:basics-sections |
-| Steppers: money ±1,000 / ⇧ ±10,000; age ±1; percent ±0.1; ↑/↓ keys; hold-to-repeat; clamping | PO:stepper tests (×3) — applies to every DraftNumberInput-family field |
+| Steppers: money ±1,000 / ⇧ ±10,000; age ±1; percent ±0.1; ↑/↓ keys; hold-to-repeat (value-wait while held + quiescence stop-proof); clamping | PO:stepper tests (×3) — applies to every DraftNumberInput-family field |
+| Draft inputs never re-take focus after commit (late select-frame guard) | NI:late-focus-select — the race forced deterministically via trapped rAF |
 | Hero readout statements — never split across lines at three widths | PO:hero-statements |
 | Radius token scale — no pills; computed radii ≤ 6px on card/input/tab/button/badge + screenshot artifact | PO:radius |
 | Basics: Your age | NI:partial-typing |
@@ -205,4 +211,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 267/267 items covered (70 state fields + 71 VARIABLES rows + 80 Growth + 23 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields (experiment ×2, hidden lists ×2), +5 Drawdown items, +8 Compare items over the M6 count of 250.**
+**Manifest: 268/268 items covered (70 state fields + 71 VARIABLES rows + 81 Growth + 23 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields (experiment ×2, hidden lists ×2), +5 Drawdown items, +8 Compare items over the M6 count of 250; de-flake patch adds the focus-retention item.**

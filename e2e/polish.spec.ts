@@ -36,17 +36,24 @@ test('age steps by 1 and percent by 0.1', async ({ page }) => {
   expect((await readState(page)).assumptions.inflation).toBeCloseTo(0.031, 10);
 });
 
-test('hold-to-repeat keeps stepping', async ({ page }) => {
+test('hold-to-repeat keeps stepping while held and stops on release', async ({ page }) => {
   await page.goto('/');
   const input = page.getByLabel('Cash balance', { exact: true });
   const up = page.getByLabel('Cash balance increment', { exact: true });
   const box = (await up.boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
-  await page.waitForTimeout(800); // 400ms delay + repeats
+  // Deterministic: wait ON THE VALUE while holding — crossing 4,000 proves the
+  // initial step plus ≥3 repeat ticks fired, however long the frames take.
+  await expect
+    .poll(async () => Number((await input.inputValue()).replaceAll(',', '')), { timeout: 15_000 })
+    .toBeGreaterThanOrEqual(4_000);
   await page.mouse.up();
-  const value = Number((await input.inputValue()).replaceAll(',', ''));
-  expect(value).toBeGreaterThanOrEqual(4_000); // 1 initial + ≥3 repeats
+  // Stop-proof: a leaked repeat would keep dirtying state every 60ms, the
+  // hash-pending flag would never clear, and readState would time out.
+  const settled = await readState(page);
+  const displayed = Number((await input.inputValue()).replaceAll(',', ''));
+  expect(settled.assumptions.balances.cash).toBe(displayed);
 });
 
 // ---- item 4: Basics sections ------------------------------------------------

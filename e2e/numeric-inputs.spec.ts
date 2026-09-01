@@ -38,6 +38,45 @@ test('Enter commits like blur does', async ({ page }) => {
   expect((await readState(page)).assumptions.balances.cash).toBe(25_000);
 });
 
+test('a late focus-select frame never steals focus back after commit (the parallel-run flake)', async ({ page }) => {
+  // Root cause of the M6.1 flakes: onFocus scheduled rAF(select), and
+  // HTMLInputElement.select() FOCUSES the element. On a busy machine the rAF
+  // can fire after the user already blurred — re-opening the draft and showing
+  // the raw unformatted value. Trapping rAF makes that late schedule
+  // deterministic instead of load-dependent; the interactions and the
+  // assertions (focus location, rendered text) are the real user-visible ones.
+  await page.goto('/');
+  await commitInput(page, 'Cash balance', '50000');
+  const input = page.getByLabel('Cash balance', { exact: true });
+  await expect(input).toHaveValue('50,000');
+
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __rafTrap?: FrameRequestCallback[];
+      __origRaf?: typeof requestAnimationFrame;
+      requestAnimationFrame: typeof requestAnimationFrame;
+    };
+    w.__rafTrap = [];
+    w.__origRaf = w.requestAnimationFrame.bind(window);
+    w.requestAnimationFrame = (cb: FrameRequestCallback) => (w.__rafTrap!.push(cb), 0);
+  });
+  await input.click(); // focus → the select() callback lands in the trap
+  await page.keyboard.press('Tab'); // real blur + commit while select is still pending
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __rafTrap?: FrameRequestCallback[];
+      __origRaf?: typeof requestAnimationFrame;
+      requestAnimationFrame: typeof requestAnimationFrame;
+    };
+    w.requestAnimationFrame = w.__origRaf!;
+    for (const cb of w.__rafTrap!) cb(performance.now());
+  });
+
+  await expect(input).not.toBeFocused(); // the late frame must not yank focus back
+  await expect(input).toHaveValue('50,000'); // and the display stays committed-formatted
+  expect((await readState(page)).assumptions.balances.cash).toBe(50_000);
+});
+
 test('invalid input shows inline validation and keeps the last good value', async ({ page }) => {
   await page.goto('/');
   await commitInput(page, 'Traditional 401k balance', '50000');

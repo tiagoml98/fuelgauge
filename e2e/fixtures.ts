@@ -42,19 +42,25 @@ export async function loadState(page: Page, state: unknown): Promise<void> {
   await page.getByText('FuelGauge').first().waitFor();
 }
 
-/** Hash writes are debounced 300ms — poll until the hash decodes and is stable. */
+/**
+ * Deterministic state read: the store sets data-hash-pending synchronously
+ * with every state change and clears it when the debounced write lands, so
+ * "no pending flag + non-empty hash" IS quiescence — no stability guessing,
+ * no stale pre-interaction hash. A repeat that failed to stop would keep the
+ * flag pending forever and fail here by timeout, not by luck.
+ */
 export async function readState(page: Page): Promise<PersistedState> {
-  let prev = '';
-  for (let i = 0; i < 25; i++) {
-    await page.waitForTimeout(200);
-    const hash = await page.evaluate(() => window.location.hash.slice(1));
-    if (hash !== '' && hash === prev) {
-      const json = decompressFromEncodedURIComponent(hash);
-      if (json) return JSON.parse(json) as PersistedState;
-    }
-    prev = hash;
-  }
-  throw new Error('URL hash never settled');
+  await page.waitForFunction(
+    () =>
+      !document.documentElement.hasAttribute('data-hash-pending') &&
+      window.location.hash.length > 1,
+    undefined,
+    { timeout: 15_000, polling: 100 },
+  );
+  const hash = await page.evaluate(() => window.location.hash.slice(1));
+  const json = decompressFromEncodedURIComponent(hash);
+  if (!json) throw new Error('URL hash did not decode');
+  return JSON.parse(json) as PersistedState;
 }
 
 /** Commit a draft input: fill, blur, and let the hash settle. */

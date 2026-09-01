@@ -121,7 +121,12 @@ export function DraftNumberInput({
         aria-invalid={invalid || undefined}
         onFocus={(e) => {
           setDraft(String(value === 0 ? '' : value));
-          requestAnimationFrame(() => e.target.select());
+          const el = e.target;
+          // select() FOCUSES the element — on a busy frame this callback can
+          // fire after the user already left, so it must never run then
+          requestAnimationFrame(() => {
+            if (document.activeElement === el) el.select();
+          });
         }}
         onChange={(e) => {
           setDraft(e.target.value);

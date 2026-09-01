@@ -11,8 +11,15 @@ import { cn } from '@/lib/utils';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 export interface DraftNumberProps {
-  value: number;
+  /** undefined = "not entered" — only meaningful with onClear (M6.2 #1). */
+  value: number | undefined;
   onCommit: (v: number) => void;
+  /**
+   * M6.2 #1 explicit-entry fields: present ⇒ the field may be EMPTY. An empty
+   * committed draft calls onClear (back to "not entered"); the placeholder
+   * states the assumption that applies while empty.
+   */
+  onClear?: () => void;
   /** Format the committed display. */
   format?: (v: number) => string;
   /** Parse a raw draft; return null when invalid. */
@@ -45,6 +52,7 @@ export const parsePlain = (raw: string): number | null => {
 export function DraftNumberInput({
   value,
   onCommit,
+  onClear,
   format = groups,
   parse = parsePlain,
   min,
@@ -70,6 +78,12 @@ export function DraftNumberInput({
 
   const tryCommit = () => {
     if (draft === null) return;
+    if (onClear !== undefined && draft.trim() === '') {
+      onClear(); // explicit-entry field emptied → back to "not entered"
+      setDraft(null);
+      setInvalid(false);
+      return;
+    }
     const parsed = parse(draft);
     const ok =
       parsed !== null && (min === undefined || parsed >= min) && (max === undefined || parsed <= max);
@@ -84,7 +98,7 @@ export function DraftNumberInput({
 
   // Stepping always commits (the result is always valid) and clamps
   const stepBy = (dir: 1 | -1, big: boolean) => {
-    const base = draft !== null ? (parse(draft) ?? latest.current) : latest.current;
+    const base = (draft !== null ? (parse(draft) ?? latest.current) : latest.current) ?? 0;
     const size = big && bigStep !== undefined ? bigStep : step;
     let next = Math.round((base + dir * size) * 1e6) / 1e6;
     if (min !== undefined) next = Math.max(min, next);
@@ -116,11 +130,11 @@ export function DraftNumberInput({
           suffix && 'pr-9',
           invalid && 'border-red-400 focus-visible:ring-red-300 dark:border-red-700',
         )}
-        value={draft ?? format(value)}
+        value={draft ?? (value === undefined ? '' : format(value))}
         placeholder={placeholder}
         aria-invalid={invalid || undefined}
         onFocus={(e) => {
-          setDraft(String(value === 0 ? '' : value));
+          setDraft(value === undefined || value === 0 ? '' : String(value));
           const el = e.target;
           // select() FOCUSES the element — on a busy frame this callback can
           // fire after the user already left, so it must never run then
@@ -184,6 +198,66 @@ export function MoneyInput(props: Omit<DraftNumberProps, 'format'>) {
       bigStep={10_000}
       {...props}
     />
+  );
+}
+
+/**
+ * M6.2 #1: explicit-entry basis field. Empty = "not entered" — the stated
+ * assumption (placeholder + chip) applies; no balance edit ever fills it;
+ * "clear" returns it to empty.
+ */
+export function BasisField({
+  value,
+  balance,
+  assumption,
+  placeholder,
+  chipId,
+  label,
+  onCommit,
+  onClear,
+}: {
+  value: number | undefined;
+  balance: number;
+  /** Chip text after "basis not entered — ". */
+  assumption: string;
+  placeholder: string;
+  chipId: string;
+  label: string;
+  onCommit: (v: number) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="w-full">
+      <div className="flex items-center gap-1.5">
+        <MoneyInput
+          className="min-w-0 flex-1"
+          value={value}
+          min={0}
+          onCommit={onCommit}
+          onClear={onClear}
+          placeholder={placeholder}
+          aria-label={label}
+        />
+        {value !== undefined && (
+          <button
+            type="button"
+            aria-label={`clear ${label}`}
+            className="shrink-0 text-[11px] text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200"
+            onClick={onClear}
+          >
+            clear
+          </button>
+        )}
+      </div>
+      {value === undefined && balance > 0 && (
+        <p
+          data-testid={chipId}
+          className="mt-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-right text-[11px] leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+        >
+          basis not entered — {assumption}
+        </p>
+      )}
+    </div>
   );
 }
 

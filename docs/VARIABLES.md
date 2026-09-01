@@ -35,16 +35,16 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 |---|---|---|---|
 | Traditional 401k balance | per filer | $ | Pre-tax bucket |
 | Traditional IRA balance | per filer | $ | Pre-tax bucket; drives backdoor pro-rata warning |
-| Traditional IRA — nondeductible basis | per filer | $ | M1 #3: existing Form 8606 basis, default $0; gate-#11 accruals add to it; recovered pro rata tax-free on withdrawal |
+| Traditional IRA — nondeductible basis | per filer | $ (explicit entry, may be empty) | M1 #3 + M6.2 #1: existing Form 8606 basis. EXPLICIT ENTRY — never auto-filled; empty = not entered → no nondeductible basis, withdrawals fully taxable. Gate-#11 accruals add to the entered value; recovered pro rata tax-free on withdrawal |
 | Roth 401k balance | per filer | $ | Roth bucket |
-| Roth 401k — contribution basis | per filer | $ | Gate #3. Default $0 — unentered balance is treated as earnings (conservative). Forward contributions tracked as basis. On rollover: basis → Roth IRA basis, earnings → Roth IRA earnings |
+| Roth 401k — contribution basis | per filer | $ (explicit entry, may be empty) | Gate #3 + M6.2 #1. EXPLICIT ENTRY — never auto-filled; empty = not entered → the full balance counts as earnings (conservative). Forward contributions tracked as basis. On rollover: basis → Roth IRA basis, earnings → Roth IRA earnings |
 | Roth IRA — contribution basis | per filer | $ | Withdrawable any time |
 | Roth IRA — conversions, rows {year, amount, taxablePortion} | per filer | rows: year + $ + $ | Gate #4. Seasoning (5 tax years from conversion year) applies **only to the taxable portion**; the nontaxable portion is accessible immediately. Within each conversion, IRS ordering: taxable first, then nontaxable. Backdoor contributions are recorded as conversions with taxablePortion = 0 (pro-rata ignored per ASSUMPTIONS T8) — never locked. Ladder conversions *(P2)* have taxablePortion = amount → access (M3) |
 | Roth IRA — earnings | per filer | $ | Locked until 59½ **and** 5 years since that filer's first funding |
 | Roth IRA — first-funded year | per filer | year | Starts that filer's 5-year clock; blank = first year the model sees Roth IRA funding — a rollover counts as funding (starts the clock if no Roth IRA existed before) |
 | HSA balance | per filer | $ | Contributions auto-stop at 65 |
 | Invested taxable balance | household | $ | Taxable bucket |
-| Invested taxable — current cost basis | household | $ | 0 ≤ basis ≤ balance; default = balance. Consumed by accumulate (M2), ate (M2), tax on sale (M3) |
+| Invested taxable — current cost basis | household | $ (explicit entry, may be empty) | M6.2 #1: EXPLICIT ENTRY — no balance edit ever touches it; a clear control returns it to empty. Empty = not entered → modeled as basis = balance (no embedded gains, optimistic; stated in the UI as placeholder, chip, and readout line). The sim grows the entered basis with contributions and reinvested dividends (M9). Consumed by accumulate (M2), ate (M2), tax on sale (M3) |
 | Cash balance | household | $ | Basis = balance; interest taxed annually (gate #8) |
 | Include toggle — per account (×7) | — | bool | true — accumulate/drawdown skip excluded accounts entirely |
 

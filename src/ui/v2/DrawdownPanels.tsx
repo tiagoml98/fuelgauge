@@ -145,6 +145,9 @@ export function MilestonesPanel({
         })()}{' '}
         Lifetime after-tax spending {fmtMoney0(tiles.lifetimeAfterTaxSpending)} · cumulative tax{' '}
         {fmtMoney0(tiles.cumulativeTax)} ({tiles.lensLabel}).
+        {a.balances.taxable > 0 && a.balances.taxableBasis === undefined && (
+          <> cost basis not entered — taxable withdrawals modeled tax-free.</>
+        )}
       </p>
     </Card>
   );

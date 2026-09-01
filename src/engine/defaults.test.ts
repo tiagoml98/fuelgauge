@@ -95,13 +95,13 @@ describe('defaultAssumptions', () => {
     for (const id of ALL_ACCOUNTS) expect(a.include[id]).toBe(true);
   });
 
-  it('splits balances per filer vs household (M1 #1) with documented zeros', () => {
+  it('splits balances per filer vs household (M1 #1); basis fields start NOT ENTERED (M6.2 #1)', () => {
     expect(a.balances.perFiler).toHaveLength(1); // aligned with filers
     const fb = a.balances.perFiler[0];
-    expect(fb.tradIraBasis).toBe(0); // M1 #3: Form 8606 basis input
-    expect(fb.roth401kBasis).toBe(0); // gate #3: unentered = earnings
+    expect(fb.tradIraBasis).toBeUndefined(); // absent = no Form 8606 basis, never auto-filled
+    expect(fb.roth401kBasis).toBeUndefined(); // absent = all earnings (gate #3), never auto-filled
     expect(fb.rothIra.firstFundedYear).toBeNull();
-    expect(a.balances.taxableBasis).toBe(a.balances.taxable); // household
+    expect(a.balances.taxableBasis).toBeUndefined(); // absent = basis = balance, never auto-filled
   });
 });
 

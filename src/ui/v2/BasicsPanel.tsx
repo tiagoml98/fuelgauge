@@ -79,9 +79,9 @@ export function BasicsPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
             <MoneyInput
               value={a.balances.taxable}
               min={0}
-              onCommit={(v) =>
-                patchA({ balances: { ...a.balances, taxable: v, taxableBasis: Math.min(a.balances.taxableBasis, v) || v } })
-              }
+              // M6.2 #1: a balance edit NEVER touches the basis — basis is
+              // explicit entry in Advanced, with a stated assumption when empty
+              onCommit={(v) => patchA({ balances: { ...a.balances, taxable: v } })}
               aria-label="Invested taxable balance"
             />
           }

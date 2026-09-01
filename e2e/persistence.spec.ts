@@ -36,11 +36,10 @@ function maximalState(): PersistedState {
           hsa: 7_777,
         },
         {
+          // M6.2 #1: basis fields ABSENT here — "not entered" must round-trip
           trad401k: 88_888,
           tradIra: 0,
-          tradIraBasis: 0,
           roth401k: 0,
-          roth401kBasis: 0,
           rothIra: { basis: 0, conversions: [], earnings: 0, firstFundedYear: null },
           hsa: 999,
         },

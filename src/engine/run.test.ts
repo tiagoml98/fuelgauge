@@ -265,6 +265,39 @@ describe('gross-up and sale tax mechanics', () => {
     expect(y.accounts.taxable.basis).toBeCloseTo(40_000 - gross * 0.4, 4);
   });
 
+  it('basis NOT ENTERED (M6.2 #1): taxable = balance (tax-free sale); explicit 0 = fully taxed', () => {
+    const notEntered = base((x) => {
+      x.balances.taxable = 100_000;
+      delete x.balances.taxableBasis;
+      x.dividendYield = 0;
+    });
+    const y = rowAt(simulateRun(notEntered, makeG(), w10k).years, 66);
+    expect(y.withdrawals?.taxable).toBeCloseTo(10_000, 4); // no embedded gains → no sale tax
+    expect(y.taxPaidThisYear).toBeCloseTo(0, 4);
+
+    const zero = base((x) => {
+      x.balances.taxable = 100_000;
+      x.balances.taxableBasis = 0; // an EXPLICIT zero means all gains
+      x.dividendYield = 0;
+    });
+    const y0 = rowAt(simulateRun(zero, makeG(), w10k).years, 66);
+    expect(y0.withdrawals?.taxable).toBeCloseTo(10_000 / (1 - 0.15), 4);
+  });
+
+  it('basis NOT ENTERED: Roth 401k = all earnings, trad IRA = fully taxable (unchanged assumptions)', () => {
+    const a = base((x) => {
+      x.balances.perFiler[0].roth401k = 50_000;
+      delete x.balances.perFiler[0].roth401kBasis;
+      x.balances.perFiler[0].tradIra = 30_000;
+      delete x.balances.perFiler[0].tradIraBasis;
+    });
+    const run = simulateRun(a, makeG(), w10k);
+    // rollover at drawdown start: with no entered basis, everything lands as earnings
+    const rolled = rowAt(run.years, 66);
+    expect(rolled.accounts.rothIra.rothEarnings).toBeGreaterThanOrEqual(50_000);
+    expect(rolled.accounts.rothIra.rothBasis).toBeCloseTo(0, 4);
+  });
+
   it('walks the order: cash, then taxable, then Roth basis', () => {
     const a = base((x) => {
       x.balances.cash = 10_000;

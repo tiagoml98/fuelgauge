@@ -200,9 +200,11 @@ export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext 
     return {
       trad401k: a.include.trad401k ? b.trad401k : 0,
       tradIra: a.include.tradIra ? b.tradIra : 0,
-      tradIraBasis: a.include.tradIra ? b.tradIraBasis : 0,
+      // M6.2 #1: basis is explicit entry — absent resolves to the STATED
+      // assumption here, once, at context creation (never written back)
+      tradIraBasis: a.include.tradIra ? (b.tradIraBasis ?? 0) : 0,
       roth401k: a.include.roth401k ? b.roth401k : 0,
-      roth401kBasis: a.include.roth401k ? b.roth401kBasis : 0,
+      roth401kBasis: a.include.roth401k ? (b.roth401kBasis ?? 0) : 0,
       rothIra,
       hsa: a.include.hsa ? b.hsa : 0,
       matchTrad: 0, // starting balances count as fully vested
@@ -227,7 +229,8 @@ export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext 
     cashRaw: resolveSchedule(g.cashContrib, rawOpts),
     filers,
     taxable: a.include.taxable ? a.balances.taxable : 0,
-    taxableBasis: a.include.taxable ? a.balances.taxableBasis : 0,
+    // absent = not entered → basis = balance (no embedded gains, optimistic)
+    taxableBasis: a.include.taxable ? (a.balances.taxableBasis ?? a.balances.taxable) : 0,
     cash: a.include.cash ? a.balances.cash : 0,
     cumulativeTax: 0,
     noted: new Set<string>(),

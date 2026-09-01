@@ -27,7 +27,7 @@ import type {
 import { useStore } from '../../state/store';
 import { ACCOUNT_LABELS, ACCOUNT_ORDER } from '../theme/colors';
 import { Group } from './Group';
-import { AgeInput, DraftNumberInput, FieldRow, fmtMoney0, MoneyInput, PercentInput } from './inputs';
+import { AgeInput, BasisField, DraftNumberInput, FieldRow, fmtMoney0, MoneyInput, PercentInput } from './inputs';
 import { ScheduleControl } from './ScheduleControl';
 
 const YearInput = ({ value, onCommit, label }: { value: number | null; onCommit: (v: number | null) => void; label: string }) => (
@@ -116,9 +116,41 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       {a.balances.perFiler.map((b, f) => (
         <Group key={f} title={a.filers.length > 1 ? `Detailed balances — filer ${f + 1}` : 'Detailed balances'} hint="bases, Roth sub-balances, conversions">
           <FieldRow label="Traditional IRA" control={<MoneyInput value={b.tradIra} min={0} onCommit={(v) => patchB(f, { tradIra: v })} aria-label={`Filer ${f + 1} Traditional IRA`} />} />
-          <FieldRow label="Trad IRA nondeductible basis" description="existing Form 8606 basis" control={<MoneyInput value={b.tradIraBasis} min={0} onCommit={(v) => patchB(f, { tradIraBasis: v })} aria-label={`Filer ${f + 1} trad IRA basis`} />} />
+          <FieldRow
+            label="Trad IRA nondeductible basis"
+            description="existing Form 8606 basis — explicit entry, never auto-filled"
+            controlWidth="w-[12rem]"
+            control={
+              <BasisField
+                value={b.tradIraBasis}
+                balance={b.tradIra}
+                assumption="withdrawals fully taxable"
+                placeholder="none — fully taxable"
+                chipId={`basis-chip-tradira-${f}`}
+                label={`Filer ${f + 1} trad IRA basis`}
+                onCommit={(v) => patchB(f, { tradIraBasis: v })}
+                onClear={() => patchB(f, { tradIraBasis: undefined })}
+              />
+            }
+          />
           <FieldRow label="Roth 401k" control={<MoneyInput value={b.roth401k} min={0} onCommit={(v) => patchB(f, { roth401k: v })} aria-label={`Filer ${f + 1} Roth 401k`} />} />
-          <FieldRow label="Roth 401k contribution basis" description="unentered balance counts as earnings (conservative)" control={<MoneyInput value={b.roth401kBasis} min={0} onCommit={(v) => patchB(f, { roth401kBasis: v })} aria-label={`Filer ${f + 1} Roth 401k basis`} />} />
+          <FieldRow
+            label="Roth 401k contribution basis"
+            description="explicit entry, never auto-filled"
+            controlWidth="w-[12rem]"
+            control={
+              <BasisField
+                value={b.roth401kBasis}
+                balance={b.roth401k}
+                assumption="full balance counts as earnings (conservative)"
+                placeholder="not entered — all earnings"
+                chipId={`basis-chip-roth401k-${f}`}
+                label={`Filer ${f + 1} Roth 401k basis`}
+                onCommit={(v) => patchB(f, { roth401kBasis: v })}
+                onClear={() => patchB(f, { roth401kBasis: undefined })}
+              />
+            }
+          />
           {f > 0 && (
             <FieldRow label="Traditional 401k" control={<MoneyInput value={b.trad401k} min={0} onCommit={(v) => patchB(f, { trad401k: v })} aria-label={`Filer ${f + 1} Traditional 401k`} />} />
           )}
@@ -143,7 +175,23 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       ))}
 
       <Group title="Household basis & accounts">
-        <FieldRow label="Invested taxable cost basis" description="≤ balance; grows with contributions and reinvested dividends" control={<MoneyInput value={a.balances.taxableBasis} min={0} onCommit={(v) => patchA({ balances: { ...a.balances, taxableBasis: v } })} aria-label="Taxable cost basis" />} />
+        <FieldRow
+          label="Invested taxable cost basis"
+          description="explicit entry, never auto-filled — the model grows the entered basis with contributions and reinvested dividends"
+          controlWidth="w-[12rem]"
+          control={
+            <BasisField
+              value={a.balances.taxableBasis}
+              balance={a.balances.taxable}
+              assumption="modeled as basis = balance (no embedded gains, optimistic)"
+              placeholder="not entered — basis = balance"
+              chipId="basis-chip-taxable"
+              label="Taxable cost basis"
+              onCommit={(v) => patchA({ balances: { ...a.balances, taxableBasis: v } })}
+              onClear={() => patchA({ balances: { ...a.balances, taxableBasis: undefined } })}
+            />
+          }
+        />
         <div className="py-2">
           <span className="text-[13px] font-medium text-neutral-800 dark:text-neutral-200">Include accounts</span>
           {ACCOUNT_ORDER.map((id) => (

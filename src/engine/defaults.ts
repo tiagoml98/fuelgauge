@@ -158,12 +158,12 @@ export function defaultFiler(): Filer {
 }
 
 export function defaultFilerBalances(): FilerBalances {
+  // M6.2 #1: basis fields start ABSENT (not entered) — the stated assumption
+  // applies until the user types a number; nothing ever auto-fills them
   return {
     trad401k: 0,
     tradIra: 0,
-    tradIraBasis: 0,
     roth401k: 0,
-    roth401kBasis: 0,
     rothIra: { basis: 0, conversions: [], earnings: 0, firstFundedYear: null },
     hsa: 0,
   };
@@ -178,7 +178,6 @@ export function defaultAssumptions(currentYear: number): Assumptions {
     balances: {
       perFiler: [defaultFilerBalances()],
       taxable: 0,
-      taxableBasis: 0,
       cash: 0,
     },
     include: {

@@ -105,11 +105,15 @@ export interface RothIraState {
 export interface FilerBalances {
   trad401k: number;
   tradIra: number;
-  /** M1 #3: existing nondeductible basis (Form 8606), default 0; gate-#11 accruals add to it. */
-  tradIraBasis: number;
+  /**
+   * M6.2 #1: basis fields are EXPLICIT ENTRY — absent means "not entered",
+   * never auto-filled by any balance edit. Absent here = no nondeductible
+   * basis (Form 8606); withdrawals fully taxable. Gate-#11 accruals add to it.
+   */
+  tradIraBasis?: number;
   roth401k: number;
-  /** Gate #3: default 0 — unentered Roth 401k balance is treated as earnings (conservative). */
-  roth401kBasis: number;
+  /** Absent = not entered — the full balance counts as earnings (conservative, gate #3). */
+  roth401kBasis?: number;
   rothIra: RothIraState;
   hsa: number;
 }
@@ -119,8 +123,12 @@ export interface CurrentBalances {
   perFiler: FilerBalances[];
   /** Household. */
   taxable: number;
-  /** 0 ≤ basis ≤ balance; default = balance. */
-  taxableBasis: number;
+  /**
+   * M6.2 #1: explicit entry, 0 ≤ basis ≤ balance. Absent = not entered —
+   * modeled as basis = balance (no embedded gains, optimistic); the sim grows
+   * it with contributions and reinvested dividends from there (M9).
+   */
+  taxableBasis?: number;
   /** Household. Basis = balance; interest taxed annually (gate #8). */
   cash: number;
 }

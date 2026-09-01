@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -17,7 +17,7 @@ never on hash-stability timing. The suite runs against its own strict-port dev s
 (playwright.config webServer, port 5199, `reuseExistingServer: false`) so an ambient or stale
 server can never be silently reused.
 
-## 1. PersistedState fields (schema v1) — 65/65
+## 1. PersistedState fields (schema v1) — 67/67
 
 | Field | Test |
 |---|---|
@@ -79,6 +79,8 @@ server can never be silently reused.
 | display.basicsCollapsed | PO:basics-sections (collapse + reload persistence) |
 | display.activeTab | DD:tab-switching (switch, reload persistence) · PS:maximal |
 | growthScenarios[].experiment / strategies[].experiment (M6.1) | PS:maximal (scenario) · CM:experiments (spawn tags, keep clears, clear removes) |
+| balances.taxableBasis / perFiler[].roth401kBasis / perFiler[].tradIraBasis — explicit-entry optional (M6.2 #1) | BS (all three: empty round-trip, placeholder, chip, clear, no auto-fill on balance edit) · PS:maximal (explicit on filer 1, ABSENT on filer 2 — absence round-trips) |
+| strategies[].medical (M6.2 #2) | PS:maximal · DD:medical-slice (simple-mode entry → state → HSA-first draw) |
 | display.hiddenScenarios / hiddenStrategies (M6.1) | PS:maximal · CM:visibility (hide → deselect → persist through reload) |
 | display.compareSelection / compareBaseline | PS:maximal · CP:hand-case · CM:bulk-delete (cleaned on delete/hide) |
 
@@ -141,6 +143,9 @@ table/tooltip/bridge equality).
 | Advanced: 10 limit fields | PS:maximal · SE:limit-warning |
 | Advanced: horizon/SWR/coast/barista/HSA treatment/coverage | PS:maximal |
 | Advanced: plan toggles + access-age overrides | PS:maximal |
+| Advanced sections (M6.2 #3): "Assumptions worth questioning" + "Reference & plan rules" (rarely changed, collapsed) | LT:advanced-sections (limits hidden until expanded; group titles unchanged) |
+| Live sensitivity hints (M6.2 #3): ±1% return → Coast FIRE years; ±5pts effective rate → trad-vs-Roth swing | LT:advanced-sections — both strings machine-checked vs engine + live reprice after editing the rate |
+| Basis fields: explicit entry, chip, placeholder, clear control, readout line (M6.2 #1) | BS (three tests incl. the 99,871 reproduction + readout) |
 | Hero figure + narrative (populated, unset-target, empty variants) | EQ:hero-metrics · LT:empty-state · LT:render-examples |
 | Lens toggles ×3 (segmented, both states visible) | LN (one test each) |
 | Chart: series values, crosshair tooltip readout incl. event lines | EQ:tooltip |
@@ -150,7 +155,7 @@ table/tooltip/bridge equality).
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-## 4. Drawdown-tab controls (M5 re-audit + M6.1) — 23/23
+## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2) — 25/25
 
 `DD` = drawdown.spec. All under the console guard.
 
@@ -179,6 +184,8 @@ table/tooltip/bridge equality).
 | Bridge summary counts locked vs depleted apart (M6.1 #2) | DD:locked (15 locked years ✗) |
 | Readout narrates phases + attempted-vs-withdrawn in locked years (M6.1 #2) | DD:locked (During 45–59, withdrawals attempted $40,000/yr) |
 | Chart structure: buckets = 4 aggregate series (structurally seamless), accounts = per-account with year-step (M6.1 #1) | DD:bucket-series (data-series artifact both modes) |
+| Medical slice editor "of which medical" — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
+| HSA last resort — funded past pot-death, depleted only at HSA zero (M6.2 #2) | DD:hsa-last-resort (spans text, taxed draw in table, gap only at 89) + engine shape tests |
 
 ## 5. Compare-tab controls (M6 re-audit + M6.1) — 22/22
 
@@ -211,4 +218,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 268/268 items covered (70 state fields + 71 VARIABLES rows + 81 Growth + 23 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields (experiment ×2, hidden lists ×2), +5 Drawdown items, +8 Compare items over the M6 count of 250; de-flake patch adds the focus-retention item.**
+**Manifest: 275/275 items covered (72 state fields + 71 VARIABLES rows + 84 Growth + 25 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields, +5 Drawdown, +8 Compare over the M6 count of 250; de-flake patch +1; M6.2 re-audit: +2 state fields (basis explicit-entry trio, strategies[].medical), +3 Growth-panel items (basis UX, Advanced sections, sensitivity hints), +2 Drawdown items (medical slice, HSA last resort).**

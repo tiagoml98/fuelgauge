@@ -144,14 +144,14 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           <FieldRow label="Traditional IRA" control={<MoneyInput value={b.tradIra} min={0} onCommit={(v) => patchB(f, { tradIra: v })} aria-label={`Filer ${f + 1} Traditional IRA`} />} />
           <FieldRow
             label="Trad IRA nondeductible basis"
-            description="existing Form 8606 basis — explicit entry, never auto-filled"
+            description="Form 8606 basis — explicit entry, never auto-filled; empty = none: withdrawals fully taxable"
             controlWidth="w-[12rem]"
             control={
               <BasisField
                 value={b.tradIraBasis}
                 balance={b.tradIra}
                 assumption="withdrawals fully taxable"
-                placeholder="none — fully taxable"
+                placeholder="not entered"
                 chipId={`basis-chip-tradira-${f}`}
                 label={`Filer ${f + 1} trad IRA basis`}
                 onCommit={(v) => patchB(f, { tradIraBasis: v })}
@@ -162,14 +162,14 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           <FieldRow label="Roth 401k" control={<MoneyInput value={b.roth401k} min={0} onCommit={(v) => patchB(f, { roth401k: v })} aria-label={`Filer ${f + 1} Roth 401k`} />} />
           <FieldRow
             label="Roth 401k contribution basis"
-            description="explicit entry, never auto-filled"
+            description="explicit entry, never auto-filled; empty = full balance counts as earnings (conservative)"
             controlWidth="w-[12rem]"
             control={
               <BasisField
                 value={b.roth401kBasis}
                 balance={b.roth401k}
                 assumption="full balance counts as earnings (conservative)"
-                placeholder="not entered — all earnings"
+                placeholder="not entered"
                 chipId={`basis-chip-roth401k-${f}`}
                 label={`Filer ${f + 1} Roth 401k basis`}
                 onCommit={(v) => patchB(f, { roth401kBasis: v })}
@@ -203,14 +203,14 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       <Group title="Household basis & accounts">
         <FieldRow
           label="Invested taxable cost basis"
-          description="explicit entry, never auto-filled — the model grows the entered basis with contributions and reinvested dividends"
+          description="explicit entry, never auto-filled; empty = basis equals balance: no embedded gains, optimistic. The model grows the entered basis with contributions and reinvested dividends"
           controlWidth="w-[12rem]"
           control={
             <BasisField
               value={a.balances.taxableBasis}
               balance={a.balances.taxable}
               assumption="modeled as basis = balance (no embedded gains, optimistic)"
-              placeholder="not entered — basis = balance"
+              placeholder="not entered"
               chipId="basis-chip-taxable"
               label="Taxable cost basis"
               onCommit={(v) => patchA({ balances: { ...a.balances, taxableBasis: v } })}

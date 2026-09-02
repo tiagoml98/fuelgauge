@@ -250,11 +250,13 @@ export function BasisField({
         )}
       </div>
       {value === undefined && balance > 0 && (
+        // a CHIP, not stray text: amber-100 wash survives the variant-B page
+        // tint (amber-50 did not); ⚠ so the warning is never color-alone
         <p
           data-testid={chipId}
-          className="mt-1 rounded-sm bg-amber-50 px-1.5 py-0.5 text-right text-[11px] leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+          className="mt-1 inline-block rounded-sm bg-amber-100 px-1.5 py-0.5 text-right text-[11px] leading-4 text-amber-900 dark:bg-amber-950 dark:text-amber-300"
         >
-          basis not entered — {assumption}
+          ⚠ basis not entered — {assumption}
         </p>
       )}
     </div>

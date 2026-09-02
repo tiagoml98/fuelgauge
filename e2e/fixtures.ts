@@ -71,7 +71,11 @@ export async function commitInput(page: Page, ariaLabel: string, value: string):
   await input.blur();
 }
 
-/** No visible text may clip horizontally (labels wrap; only opt-in .truncate may ellipsize). */
+/**
+ * No visible text may clip horizontally (labels wrap; only opt-in .truncate
+ * may ellipsize). PLACEHOLDERS COUNT AS TEXT (M6.2 verification): a visible
+ * placeholder wider than the input's content box is a truncation.
+ */
 export async function expectNoTruncation(page: Page, scopeTestId: string): Promise<void> {
   const clipped = await page.evaluate((testId) => {
     const scope = document.querySelector(`[data-testid="${testId}"]`);
@@ -85,7 +89,17 @@ export async function expectNoTruncation(page: Page, scopeTestId: string): Promi
         bad.push(`${el.tagName}: ${el.textContent.slice(0, 40)}`);
       }
     }
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    for (const el of scope.querySelectorAll<HTMLInputElement>('input[placeholder]')) {
+      if (el.value !== '' || el.clientWidth === 0) continue; // placeholder not showing
+      const s = getComputedStyle(el);
+      ctx.font = `${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
+      const avail = el.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+      if (ctx.measureText(el.placeholder).width > avail + 1) {
+        bad.push(`PLACEHOLDER: ${el.placeholder}`);
+      }
+    }
     return bad;
   }, scopeTestId);
-  expect(clipped, 'no label or option text may truncate').toEqual([]);
+  expect(clipped, 'no label, option, or placeholder text may truncate').toEqual([]);
 }

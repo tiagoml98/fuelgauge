@@ -8,7 +8,7 @@
 
 import { defaultPersistedState } from '../src/engine/defaults';
 import type { PersistedState } from '../src/engine/types';
-import { commitInput, expect, loadState, readState, test } from './fixtures';
+import { commitInput, expect, expectNoTruncation, loadState, readState, test } from './fixtures';
 
 function advancedState(): PersistedState {
   const s = defaultPersistedState(2026);
@@ -25,13 +25,22 @@ test('editing the taxable balance never touches the basis (the 99,871 bug)', asy
   expect(s.assumptions.balances.taxable).toBe(149_506);
   expect(s.assumptions.balances.taxableBasis).toBeUndefined(); // never entered → never written
 
-  // the basis field itself is empty with the assumption as placeholder + chip
+  // the basis field itself is empty: short placeholder, full assumption in the
+  // hint line, and a VISIBLE amber chip on the field (M6.2 verification fix)
   await page.getByRole('tab', { name: 'Advanced' }).click();
   await page.getByText('Household basis & accounts').click(); // expand the group
   const basis = page.getByLabel('Taxable cost basis', { exact: true });
   await expect(basis).toHaveValue('');
-  await expect(basis).toHaveAttribute('placeholder', /basis = balance/);
-  await expect(page.getByTestId('basis-chip-taxable')).toContainText('basis not entered');
+  await expect(basis).toHaveAttribute('placeholder', 'not entered');
+  await expect(page.getByText(/empty = basis equals balance/)).toBeVisible(); // hint line
+  const chip = page.getByTestId('basis-chip-taxable');
+  await expect(chip).toContainText('basis not entered');
+  // a chip, not stray text: its wash must differ from the page tint
+  // (amber-100; Chromium may report Tailwind's oklch token as-is)
+  const chipBg = await chip.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(['rgb(254, 243, 199)', 'oklch(0.962 0.059 95.617)']).toContain(chipBg);
+  // placeholders count as text for the no-truncation rule
+  await expectNoTruncation(page, 'inputs-panel');
 
   // explicit entry works, kills the chip, and balance edits still leave it alone
   await commitInput(page, 'Taxable cost basis', '60000');
@@ -62,11 +71,15 @@ test('Roth 401k and trad IRA basis follow the same rule: empty, stated assumptio
 
   const roth = page.getByLabel('Filer 1 Roth 401k basis', { exact: true });
   await expect(roth).toHaveValue('');
-  await expect(roth).toHaveAttribute('placeholder', /earnings/);
+  await expect(roth).toHaveAttribute('placeholder', 'not entered');
+  await expect(page.getByText(/empty = full balance counts as earnings/)).toBeVisible();
   await expect(page.getByTestId('basis-chip-roth401k-0')).toContainText('basis not entered');
   const ira = page.getByLabel('Filer 1 trad IRA basis', { exact: true });
   await expect(ira).toHaveValue('');
-  await expect(ira).toHaveAttribute('placeholder', /fully taxable/);
+  await expect(ira).toHaveAttribute('placeholder', 'not entered');
+  await expect(page.getByText(/empty = none: withdrawals fully taxable/)).toBeVisible();
+  // audit item: no placeholder in the panel may overflow its field
+  await expectNoTruncation(page, 'inputs-panel');
 
   await commitInput(page, 'Filer 1 Roth 401k basis', '45000');
   await expect(page.getByTestId('basis-chip-roth401k-0')).toHaveCount(0);

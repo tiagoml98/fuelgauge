@@ -104,7 +104,7 @@ test('medical slice editor: entered amount pays from the HSA first, tax-free at 
   s.strategies[0] = { ...s.strategies[0], order: ['cash'] };
   s.display = { ...s.display, real: false, yearlyTable: true };
   await loadState(page, s);
-  await commitInput(page, 'of which medical amount', '10000');
+  await commitInput(page, 'Medical spending (part of total) amount', '10000');
   const state = await readState(page);
   expect(state.strategies.find((w) => w.id === 'locked')?.medical).toEqual([
     { fromAge: 45, toAge: null, value: 10_000 }, // simple mode anchors at the visible start age

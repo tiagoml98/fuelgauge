@@ -145,8 +145,8 @@ table/tooltip/bridge equality).
 | Advanced: 10 limit fields | PS:maximal · SE:limit-warning |
 | Advanced: horizon/SWR/coast/barista/HSA treatment/coverage | PS:maximal |
 | Advanced: plan toggles + access-age overrides | PS:maximal |
-| Advanced sections (M6.2 #3): "Assumptions worth questioning" + "Reference & plan rules" (rarely changed, collapsed) | LT:advanced-sections (limits hidden until expanded; group titles unchanged) |
-| Live sensitivity hints (M6.2 #3): ±1% return → Coast FIRE years; ±5pts effective rate → trad-vs-Roth swing | LT:advanced-sections — both strings machine-checked vs engine + live reprice after editing the rate |
+| Advanced sections (M6.2 #3, M6.3 hierarchy): three eyebrow sections — "Your details" / "Assumptions worth questioning" / "Reference & plan rules" (rarely changed, collapsed) with intros, groups nested by indent | LT:advanced-sections (containment per section, uppercase eyebrow computed, limits hidden until expanded; group titles unchanged) |
+| Live sensitivity rows (M6.2 #3, M6.3 inline+structured): three-cell rows under their fields inside their groups — Coast FIRE at −1%/now/+1% return; trad-vs-Roth edge at −5/now/+5 pts | LT:advanced-sections — full cell text machine-checked vs engine + live reprice of the now-cell after editing the rate |
 | Basis fields: explicit entry, chip, placeholder, clear control, readout line (M6.2 #1) | BS (three tests incl. the 99,871 reproduction + readout) |
 | Hero figure + narrative (populated, unset-target, empty variants) | EQ:hero-metrics · LT:empty-state · LT:render-examples |
 | Lens toggles ×3 (segmented, both states visible) | LN (one test each) |
@@ -186,7 +186,7 @@ table/tooltip/bridge equality).
 | Bridge summary counts locked vs depleted apart (M6.1 #2) | DD:locked (15 locked years ✗) |
 | Readout narrates phases + attempted-vs-withdrawn in locked years (M6.1 #2) | DD:locked (During 45–59, withdrawals attempted $40,000/yr) |
 | Chart structure: buckets = 4 aggregate series (structurally seamless), accounts = per-account with year-step (M6.1 #1) | DD:bucket-series (data-series artifact both modes) |
-| Medical slice editor "of which medical" — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
+| Medical slice editor "Medical spending (part of total)" (renamed M6.3) — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
 | HSA last resort — funded past pot-death, depleted only at HSA zero (M6.2 #2) | DD:hsa-last-resort (spans text, taxed draw in table, gap only at 89) + engine shape tests |
 
 ## 5. Compare-tab controls (M6 re-audit + M6.1) — 22/22

@@ -114,44 +114,56 @@ test('Advanced tier shows every group and persists the tier choice', async ({ pa
   await expectNoTruncation(page, 'inputs-panel');
 });
 
-test('Advanced sections: levers vs reference, live sensitivity hints machine-checked (M6.2 #3)', async ({ page }) => {
+test('Advanced sections: eyebrow hierarchy + inline sensitivity rows machine-checked (M6.3)', async ({ page }) => {
   const state = exampleState('spotcheck');
   state.assumptions.fireSpendingTarget = 40_000;
   state.display = { ...state.display, inputsTier: 'advanced' };
   await loadState(page, state);
 
-  // two labeled sections, reference marked rarely-changed and collapsed
+  // three sections, legible with everything collapsed: eyebrow + intro each
+  await expect(page.getByTestId('section-details')).toContainText('Your details');
+  await expect(page.getByTestId('section-details')).toContainText("who's filing");
   await expect(page.getByTestId('section-levers')).toContainText('Assumptions worth questioning');
   await expect(page.getByTestId('section-reference')).toContainText('rarely changed');
-  await expect(page.getByLabel('Limit: 401k deferral', { exact: true })).toHaveCount(0); // collapsed
+  // groups nest under their sections (containment, not just order)
+  await expect(page.getByTestId('section-details').getByText('Windfalls')).toBeVisible();
+  await expect(page.getByTestId('section-levers').getByText('Returns & fees')).toBeVisible();
+  await expect(page.getByTestId('section-reference').getByText('Plan toggles & access overrides')).toBeVisible();
+  // sections read as eyebrows: smaller type than group titles, uppercase
+  const eyebrow = page.getByTestId('section-levers').locator('h2');
+  expect(await eyebrow.evaluate((el) => getComputedStyle(el).textTransform)).toBe('uppercase');
+  await expect(page.getByLabel('Limit: 401k deferral', { exact: true })).toHaveCount(0); // reference collapsed
   await page.getByText('Contribution limits (2026, indexed)').click();
   await expect(page.getByLabel('Limit: 401k deferral', { exact: true })).toBeVisible();
 
-  // sensitivity hints: the rendered numbers must equal the engine's
+  // M6.3 #2: sensitivity rows sit INSIDE their groups, under their fields,
+  // as structured cells — machine-checked against the engine
   const a = state.assumptions;
   const { coastFireAge } = await import('../src/engine/metrics');
   const shifted = (d: number) => ({
     ...a,
     returnSchedule: a.returnSchedule.map((r) => ({ ...r, value: r.value + d })),
   });
-  const base = coastFireAge(a, state.growthScenarios[0])!;
-  const up = coastFireAge(shifted(0.01), state.growthScenarios[0])!;
-  const down = coastFireAge(shifted(-0.01), state.growthScenarios[0])!;
-  const n = Math.max(Math.abs(base - up), Math.abs(down - base));
-  await expect(page.getByTestId('sensitivity-return')).toHaveText(
-    `±1% return moves Coast FIRE by ~${n} year${n === 1 ? '' : 's'} (now ${base} · −1% → ${down} · +1% → ${up})`,
+  const g = state.growthScenarios[0];
+  await page.getByTestId('section-levers').getByText('Returns & fees').click();
+  await expect(
+    page.getByTestId('section-levers').getByTestId('sensitivity-return'),
+  ).toHaveText(
+    `Coast FIRE if the return is…−1% → ${coastFireAge(shifted(-0.01), g)}·now → ${coastFireAge(a, g)}·+1% → ${coastFireAge(shifted(0.01), g)}`,
   );
-  const tRet = a.effectiveRetirementRate + a.stateTaxRate;
-  const swing = Math.round((0.05 / (1 - tRet)) * 1000) / 10;
-  await expect(page.getByTestId('sensitivity-rate')).toContainText(
-    `±5 points here move your traditional-vs-Roth result by ±${swing}%`,
+  const edge = (delta: number) => {
+    const r = (1 - (a.effectiveRetirementRate + delta + a.stateTaxRate)) / (1 - a.marginalRateNow) - 1;
+    return `${r >= 0 ? '+' : '−'}${Math.abs(Math.round(r * 1000) / 10)}%`;
+  };
+  await page.getByText('Taxes (simple mode)').click();
+  await expect(page.getByTestId('sensitivity-rate')).toHaveText(
+    `Traditional vs Roth if this rate is…−5 pts → ${edge(-0.05)}·now → ${edge(0)}·+5 pts → ${edge(0.05)}`,
   );
 
-  // the hint is live: raising the effective rate reprices the swing
-  await page.getByText('Taxes (simple mode)').click();
+  // live: raising the effective rate reprices the middle cell
   await commitInput(page, 'Effective rate', '20');
-  const swing20 = Math.round((0.05 / (1 - (0.2 + a.stateTaxRate))) * 1000) / 10;
-  await expect(page.getByTestId('sensitivity-rate')).toContainText(`±${swing20}%`);
+  const edge20 = `${((1 - (0.2 + a.stateTaxRate)) / (1 - a.marginalRateNow) - 1) >= 0 ? '+' : '−'}${Math.abs(Math.round(((1 - (0.2 + a.stateTaxRate)) / (1 - a.marginalRateNow) - 1) * 1000) / 10)}%`;
+  await expect(page.getByTestId('sensitivity-rate')).toContainText(`now → ${edge20}`);
 });
 
 test('two filers: adding filer 2 aligns state and offers the HSA family switch', async ({ page }) => {

@@ -153,8 +153,8 @@ export function StrategyEditor({
           endAge={a.horizonAge}
         />
         <ScheduleControl
-          label="of which medical"
-          description="part of spending, not added to it — paid from the HSA first, tax-free at any age; tends to rise with age"
+          label="Medical spending (part of total)"
+          description="portion of the spending above that goes to medical costs — an HSA can pay this tax-free at any age; tends to rise with age"
           rows={w.medical ?? []}
           onChange={(rows) => patch({ medical: rows })}
           startAge={startAge}

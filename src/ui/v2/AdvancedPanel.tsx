@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { coastFireAge } from '../../engine/metrics';
 import { toReal } from '../../engine/schedule';
 import type {
@@ -49,6 +49,61 @@ const YearInput = ({ value, onCommit, label }: { value: number | null; onCommit:
   />
 );
 
+/**
+ * M6.3 #3: real section hierarchy — eyebrow header (small caps, no divider),
+ * one-line intro, groups nested by indent, wide inter-section spacing.
+ */
+function Section({
+  id,
+  title,
+  intro,
+  children,
+}: {
+  id: string;
+  title: string;
+  intro: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-7 first:mt-1" data-testid={id}>
+      <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+        {title}
+      </h2>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">{intro}</p>
+      <div className="mt-1 pl-3">{children}</div>
+    </section>
+  );
+}
+
+/** M6.3 #2: "label · −Δ → v · now → v · +Δ → v" — field-hint scale, no box. */
+function SensitivityRow({
+  label,
+  cells,
+  testid,
+}: {
+  label: string;
+  cells: Array<{ k: string; v: string; now?: boolean }>;
+  testid: string;
+}) {
+  return (
+    <p
+      className="flex flex-wrap items-baseline gap-x-1.5 py-1 text-xs text-neutral-500 dark:text-neutral-400"
+      data-testid={testid}
+    >
+      <span>{label}</span>
+      {cells.map((c, i) => (
+        <span key={c.k} className="tnum whitespace-nowrap">
+          {i > 0 && <span className="mr-1.5 text-neutral-300 dark:text-neutral-600">·</span>}
+          {c.k} →{' '}
+          <span className={c.now ? 'font-medium text-neutral-800 dark:text-neutral-200' : ''}>
+            {c.v}
+          </span>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
   const { dispatch } = useStore();
   const patchA = (patch: Partial<Assumptions>) => dispatch({ type: 'patchAssumptions', patch });
@@ -64,32 +119,33 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
   const startAge = a.filers[0].currentAge;
   const cashReturn = a.returnOverrides.cash?.[0]?.value ?? 0.04;
 
-  // M6.2 #3: live sensitivity on the two biggest levers
+  // M6.2 #3 / M6.3 #2: live sensitivity on the two biggest levers, rendered
+  // as compact cell rows directly under the fields they describe
   const sensitivity = useMemo(() => {
     const shifted = (delta: number) => ({
       ...a,
       returnSchedule: a.returnSchedule.map((r) => ({ ...r, value: r.value + delta })),
     });
-    let coast: string | null = null;
+    let coast: { down: number; base: number; up: number } | null = null;
     try {
       const base = coastFireAge(a, g);
       const up = coastFireAge(shifted(0.01), g);
       const down = coastFireAge(shifted(-0.01), g);
-      if (base !== null && up !== null && down !== null) {
-        const n = Math.max(Math.abs(base - up), Math.abs(down - base));
-        coast = `±1% return moves Coast FIRE by ~${n} year${n === 1 ? '' : 's'} (now ${base} · −1% → ${down} · +1% → ${up})`;
-      }
+      if (base !== null && up !== null && down !== null) coast = { down, base, up };
     } catch {
       coast = null; // no FIRE target / unreachable — nothing honest to say
     }
-    const tRet = a.effectiveRetirementRate + a.stateTaxRate;
-    const swing = Math.round((0.05 / (1 - tRet)) * 1000) / 10;
-    const rate = `±5 points here move your traditional-vs-Roth result by ±${swing}% — each pre-tax dollar nets ${Math.round((1 - tRet) * 100)}¢ at withdrawal`;
-    return { coast, rate };
+    // traditional's edge over Roth on rates alone: (1 − t_ret) ÷ (1 − t_now) − 1
+    const edge = (delta: number) => {
+      const r = (1 - (a.effectiveRetirementRate + delta + a.stateTaxRate)) / (1 - a.marginalRateNow) - 1;
+      return `${r >= 0 ? '+' : '−'}${Math.abs(Math.round(r * 1000) / 10)}%`;
+    };
+    return { coast, edge: { down: edge(-0.05), base: edge(0), up: edge(0.05) } };
   }, [a, g]);
 
   return (
     <div>
+      <Section id="section-details" title="Your details" intro="who's filing, what you already hold, and how it's being fed">
       <Group title="Filers & filing" defaultOpen={a.filers.length > 1}>
         <FieldRow
           label="Filers"
@@ -364,25 +420,10 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           + windfall
         </Button>
       </Group>
+      </Section>
 
-      {/* M6.2 #3: the levers that move the answer, separated from reference data */}
-      <div className="pt-4" data-testid="section-levers">
-        <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-          Assumptions worth questioning
-        </h2>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          the handful of numbers that move the answer — question these before trusting any result
-        </p>
-        {sensitivity.coast && (
-          <p className="mt-1.5 rounded-md bg-neutral-50 px-2 py-1 text-xs leading-5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300" data-testid="sensitivity-return">
-            {sensitivity.coast}
-          </p>
-        )}
-        <p className="mt-1.5 rounded-md bg-neutral-50 px-2 py-1 text-xs leading-5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300" data-testid="sensitivity-rate">
-          {sensitivity.rate}
-        </p>
-      </div>
-
+      {/* M6.2 #3 / M6.3: the levers that move the answer, separated from reference data */}
+      <Section id="section-levers" title="Assumptions worth questioning" intro="the handful of numbers that move the answer — question these before trusting any result">
       <Group title="Returns & fees">
         <ScheduleControl
           label="Investment return"
@@ -393,6 +434,17 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           endAge={a.horizonAge}
           unit="percent"
         />
+        {sensitivity.coast && (
+          <SensitivityRow
+            testid="sensitivity-return"
+            label="Coast FIRE if the return is…"
+            cells={[
+              { k: '−1%', v: String(sensitivity.coast.down) },
+              { k: 'now', v: String(sensitivity.coast.base), now: true },
+              { k: '+1%', v: String(sensitivity.coast.up) },
+            ]}
+          />
+        )}
         <FieldRow label="Cash return" description="cash always uses its own return — never fees, never overrides" control={<PercentInput value={cashReturn} onCommit={(v) => patchA({ returnOverrides: { ...a.returnOverrides, cash: [{ fromAge: 0, toAge: null, value: v }] } })} aria-label="Cash return" />} />
         <FieldRow label="Fees / expense ratio" description="acts exactly like a return cut — 1% of fees cancels 1% of return, forever" control={<PercentInput value={a.fees} onCommit={(v) => patchA({ fees: v })} aria-label="Fees" />} />
         <FieldRow label="Dividend yield" description="taxable drag; after-tax dividends become cost basis" control={<PercentInput value={a.dividendYield} onCommit={(v) => patchA({ dividendYield: v })} aria-label="Dividend yield" />} />
@@ -416,6 +468,15 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       <Group title="Taxes (simple mode)">
         <FieldRow label="Marginal rate now" description="prices every deferred dollar today — the traditional side of the rate arbitrage" control={<PercentInput value={a.marginalRateNow} onCommit={(v) => patchA({ marginalRateNow: v })} aria-label="Marginal rate" />} />
         <FieldRow label="Effective retirement rate" description="prices every pre-tax dollar at withdrawal — deliberately effective, not marginal" control={<PercentInput value={a.effectiveRetirementRate} onCommit={(v) => patchA({ effectiveRetirementRate: v })} aria-label="Effective rate" />} />
+        <SensitivityRow
+          testid="sensitivity-rate"
+          label="Traditional vs Roth if this rate is…"
+          cells={[
+            { k: '−5 pts', v: sensitivity.edge.down },
+            { k: 'now', v: sensitivity.edge.base, now: true },
+            { k: '+5 pts', v: sensitivity.edge.up },
+          ]}
+        />
         <FieldRow label="LTCG rate" control={<PercentInput value={a.ltcgRate} onCommit={(v) => patchA({ ltcgRate: v })} aria-label="LTCG rate" />} />
         <FieldRow label="Tax mode" description="bracket mode arrives in Phase 2" control={<Select value="simple"><SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="simple">Simple (flat rates)</SelectItem></SelectContent></Select>} />
       </Group>
@@ -458,17 +519,10 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           }
         />
       </Group>
+      </Section>
 
-      {/* M6.2 #3: reference data — IRS numbers and plan facts, rarely touched */}
-      <div className="pt-4" data-testid="section-reference">
-        <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-          Reference &amp; plan rules
-        </h2>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-          rarely changed — IRS limits, access ages, and what your plan permits
-        </p>
-      </div>
-
+      {/* M6.2 #3 / M6.3: reference data — IRS numbers and plan facts, rarely touched */}
+      <Section id="section-reference" title="Reference & plan rules" intro="rarely changed — IRS limits, access ages, and what your plan permits">
       <Group title="Contribution limits (2026, indexed)">
         {(
           [
@@ -536,6 +590,7 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
           </div>
         ))}
       </Group>
+      </Section>
     </div>
   );
 }

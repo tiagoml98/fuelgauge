@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useState } from 'react';
+import { DEFAULT_BRACKET_TABLES } from '../../engine/defaults';
 import { resolveDrawdownStart } from '../../engine/run';
 import type {
   Assumptions,
@@ -117,6 +118,10 @@ export function StrategyEditor({
     dispatch({ type: 'patchStrategy', id: w.id, patch: p });
   const startAge = a.filers[0].currentAge;
   const autoStart = resolveDrawdownStart(a, g, { ...w, drawdownStartAge: undefined });
+  // M8: fill-to-bracket offers only the ACTIVE table's bounded rates
+  const fillRates = (a.bracketTables?.[a.filingStatus] ?? DEFAULT_BRACKET_TABLES[a.filingStatus]).brackets
+    .filter((b) => b.upTo !== null)
+    .map((b) => b.rate);
 
   return (
     <div>
@@ -273,6 +278,102 @@ export function StrategyEditor({
         >
           + income row
         </Button>
+      </Group>
+
+      <Group
+        title="Conversion ladder"
+        hint="convert pre-tax → Roth during drawdown; tranches unlock at the earlier of +5 tax years or 60"
+        defaultOpen={(w.ladder?.length ?? 0) > 0}
+      >
+        {(w.ladder ?? []).map((row, i) => (
+          <div key={i} className="mt-1.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-800">
+            <div className="flex items-center gap-1.5">
+              <Select
+                value={row.amount !== undefined ? 'amount' : 'fill'}
+                onValueChange={(v) =>
+                  patch({
+                    ladder: (w.ladder ?? []).map((x, j) =>
+                      j === i
+                        ? v === 'amount'
+                          ? { fromAge: x.fromAge, toAge: x.toAge, amount: 20_000 }
+                          : { fromAge: x.fromAge, toAge: x.toAge, fillToBracketPct: 0.12 }
+                        : x,
+                    ),
+                  })
+                }
+              >
+                <SelectTrigger size="sm" className="w-36 bg-white text-xs dark:bg-neutral-900" aria-label={`Ladder ${i + 1} type`}>
+                  <SelectValue>{row.amount !== undefined ? 'Fixed $ / yr' : 'Fill bracket'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="amount">Fixed $ / yr (today's $)</SelectItem>
+                  <SelectItem value="fill">Fill to top of a bracket</SelectItem>
+                </SelectContent>
+              </Select>
+              {row.amount !== undefined ? (
+                <MoneyInput
+                  className="min-w-0 flex-1"
+                  value={row.amount}
+                  min={0}
+                  onCommit={(v) => patch({ ladder: (w.ladder ?? []).map((x, j) => (j === i ? { ...x, amount: v } : x)) })}
+                  aria-label={`Ladder ${i + 1} amount`}
+                />
+              ) : (
+                <Select
+                  value={String(row.fillToBracketPct ?? 0.12)}
+                  onValueChange={(v) => patch({ ladder: (w.ladder ?? []).map((x, j) => (j === i ? { fromAge: x.fromAge, toAge: x.toAge, fillToBracketPct: Number(v) } : x)) })}
+                >
+                  <SelectTrigger size="sm" className="min-w-0 flex-1 bg-white text-xs dark:bg-neutral-900" aria-label={`Ladder ${i + 1} bracket`}>
+                    <SelectValue>{`top of ${Math.round((row.fillToBracketPct ?? 0.12) * 100)}%`}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {fillRates.map((r) => (
+                      <SelectItem key={r} value={String(r)}>{`top of the ${Math.round(r * 100)}% bracket`}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="ghost" size="sm" className="h-7 px-1.5 text-neutral-400 hover:text-red-500" aria-label={`delete ladder ${i + 1}`} onClick={() => patch({ ladder: (w.ladder ?? []).filter((_, j) => j !== i) })}>
+                ×
+              </Button>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-neutral-400">
+              from
+              <AgeInput className="w-16" value={row.fromAge} onCommit={(v) => patch({ ladder: (w.ladder ?? []).map((x, j) => (j === i ? { ...x, fromAge: v } : x)) })} aria-label={`Ladder ${i + 1} from age`} />
+              to
+              <DraftNumberInput
+                className="w-16"
+                value={row.toAge ?? 0}
+                format={(v) => (v === 0 ? '' : String(v))}
+                parse={(raw) => {
+                  const t = raw.trim();
+                  if (t === '') return 0;
+                  const n = Number(t);
+                  return Number.isInteger(n) && n > 0 ? n : null;
+                }}
+                onCommit={(v) => patch({ ladder: (w.ladder ?? []).map((x, j) => (j === i ? { ...x, toAge: v === 0 ? null : v } : x)) })}
+                placeholder="∞"
+                invalidMessage="whole age"
+                aria-label={`Ladder ${i + 1} to age`}
+              />
+              {row.fillToBracketPct !== undefined && a.taxMode !== 'bracket' && (
+                <span className="text-amber-700 dark:text-amber-400">fill-to-bracket needs bracket mode — this row is skipped</span>
+              )}
+            </div>
+          </div>
+        ))}
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-1.5 h-7 text-xs"
+          onClick={() => patch({ ladder: [...(w.ladder ?? []), { fromAge: autoStart, toAge: 59, amount: 20_000 }] })}
+        >
+          + conversion row
+        </Button>
+        <p className="mt-1 text-xs text-neutral-500">
+          tax comes from cash, then taxable; with neither left it's withheld from the conversion
+          (10% penalty before 60)
+        </p>
       </Group>
 
       <Group title="Withdrawal order" hint="drag to reorder — sources are skipped until their access age opens" defaultOpen>

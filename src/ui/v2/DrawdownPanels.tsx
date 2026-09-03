@@ -58,10 +58,25 @@ export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult 
           <div className="tnum text-xl font-semibold">{pct(now)}</div>
           <div className="text-[11px] text-neutral-500">marginal today</div>
         </div>
-        <div className="opacity-50">
-          <div className="text-xl font-semibold">—</div>
-          <div className="text-[11px] text-neutral-500">conversion years (Phase 2 ladder)</div>
-        </div>
+        {(() => {
+          // M8: the ladder's average conversion rate fills the middle column
+          const conv = (run?.years ?? []).filter((y) => y.ladder !== undefined);
+          const totConverted = conv.reduce((s, y) => s + (y.ladder?.converted ?? 0), 0);
+          const totTax = conv.reduce((s, y) => s + (y.ladder?.tax ?? 0), 0);
+          return totConverted > 0.005 ? (
+            <div>
+              <div className="tnum text-xl font-semibold" data-testid="rate-conversion">{pct(totTax / totConverted)}</div>
+              <div className="text-[11px] text-neutral-500">
+                conversion years ({conv[0].age}–{conv[conv.length - 1].age})
+              </div>
+            </div>
+          ) : (
+            <div className="opacity-50">
+              <div className="text-xl font-semibold">—</div>
+              <div className="text-[11px] text-neutral-500">conversion years (no ladder rows)</div>
+            </div>
+          );
+        })()}
         <div>
           <div className="tnum text-xl font-semibold" data-testid="rate-later">
             {!bracket || firstPreTax ? pct(later) : '—'}

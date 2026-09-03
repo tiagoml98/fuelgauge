@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "assumptions": {
+    "filers": [
+      {
+        "currentAge": 64
+      }
+    ],
+    "filingStatus": "single",
+    "stateTaxRate": 0,
+    "currentYear": 2026,
+    "balances": {
+      "perFiler": [
+        {
+          "trad401k": 2000000,
+          "tradIra": 0,
+          "roth401k": 0,
+          "rothIra": {
+            "basis": 0,
+            "conversions": [],
+            "earnings": 0,
+            "firstFundedYear": null
+          },
+          "hsa": 0
+        }
+      ],
+      "taxable": 0,
+      "cash": 200000
+    },
+    "include": {
+      "trad401k": true,
+      "tradIra": true,
+      "roth401k": true,
+      "rothIra": true,
+      "hsa": true,
+      "taxable": true,
+      "cash": true
+    },
+    "inflation": 0.03,
+    "indexWithInflation": false,
+    "returnSchedule": [
+      {
+        "fromAge": 0,
+        "toAge": null,
+        "value": 0
+      }
+    ],
+    "returnOverrides": {
+      "cash": [
+        {
+          "fromAge": 0,
+          "toAge": null,
+          "value": 0
+        }
+      ]
+    },
+    "fees": 0,
+    "dividendYield": 0,
+    "dividendTaxRate": 0.15,
+    "taxMode": "bracket",
+    "marginalRateNow": 0.24,
+    "effectiveRetirementRate": 0.12,
+    "ltcgRate": 0.15,
+    "limits": {
+      "deferral401k": 24500,
+      "catchUp401k50": 8000,
+      "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000,
+      "ira": 7500,
+      "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400,
+      "hsaFamily": 8750,
+      "hsaCatchUp55": 1000,
+      "overall415c": 72000
+    },
+    "hsaCoverage": "selfOnly",
+    "horizonAge": 90,
+    "hsaTreatment": "medical",
+    "safeWithdrawalRate": 0.04,
+    "fireSpendingTarget": 0,
+    "coastTargetAge": 65,
+    "inPlanConversion": false,
+    "inServiceWithdrawal": false,
+    "afterTaxContributions": false
+  },
+  "growthScenarios": [
+    {
+      "id": "base",
+      "name": "Ladder hand-check: $2M pre-tax + $200k cash, r = 0, unindexed",
+      "perFiler": [
+        {
+          "salary": [],
+          "contrib401k": [],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "match": {
+            "mode": "percent",
+            "rate": 0,
+            "capPctOfSalary": 0,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [],
+      "cashContrib": [],
+      "windfalls": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "base",
+      "name": "Retire at 65, $60k spending, $20k SS, fill to the 12% bracket \u2014 year 65: pool 17,000 \u00b7 fill 49,500 \u00b7 tax 5,710 from cash \u00b7 unlocks 2027",
+      "drawdownStartAge": 65,
+      "spending": [
+        {
+          "fromAge": 0,
+          "toAge": null,
+          "value": 60000
+        }
+      ],
+      "oneTimeExpenses": [],
+      "income": [
+        {
+          "kind": "socialSecurity",
+          "fromAge": 65,
+          "toAge": null,
+          "amount": 20000,
+          "label": "SS"
+        }
+      ],
+      "order": [
+        "cash",
+        "taxable",
+        "preTax",
+        "rothBasis",
+        "seasonedConversions",
+        "rothEarnings"
+      ],
+      "ladder": [
+        {
+          "fromAge": 65,
+          "toAge": null,
+          "fillToBracketPct": 0.12
+        }
+      ]
+    }
+  ],
+  "display": {
+    "real": false,
+    "ate": true,
+    "byBuckets": true,
+    "theme": "light",
+    "yearlyTable": true,
+    "activeTab": "drawdown"
+  }
+}

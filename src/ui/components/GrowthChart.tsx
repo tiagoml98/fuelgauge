@@ -130,7 +130,8 @@ export function GrowthChart({
     const markAges = new Map<number, { labels: string[]; kinds: MarkerEventKind[] }>();
     for (const y of years) {
       for (const e of y.events) {
-        if (e.kind === 'windfall' || REGIME_KINDS.has(e.kind)) {
+        // one-time events (windfall, M8 conversion) mark at N; regime changes at N − 0.5
+        if (e.kind === 'windfall' || e.kind === 'conversion' || REGIME_KINDS.has(e.kind)) {
           const x = REGIME_KINDS.has(e.kind) ? e.age - 0.5 : e.age;
           const entry = markAges.get(x) ?? { labels: [], kinds: [] };
           entry.labels.push(shortMarkerLabel(e, singleFiler));
@@ -265,7 +266,7 @@ export function GrowthChart({
             .join('');
           const total = lens(display.ate ? y.totalAte : y.total, y.age);
           const eventLines = y.events
-            .filter((e) => e.kind === 'windfall' || REGIME_KINDS.has(e.kind))
+            .filter((e) => e.kind === 'windfall' || e.kind === 'conversion' || REGIME_KINDS.has(e.kind))
             .map(
               (e) =>
                 `<div style="color:${chrome.inkMuted};font-size:10px;margin-top:2px">◆ ${e.label}</div>`,

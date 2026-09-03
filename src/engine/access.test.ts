@@ -3,6 +3,7 @@ import {
   accessOpen,
   accessibleConversionAmount,
   computeAccessAges,
+  conversionUnlockYear,
   rmdStartAge,
   rothEarningsOpen,
 } from './access';
@@ -78,17 +79,33 @@ describe('rothEarningsOpen', () => {
   });
 });
 
-describe('accessibleConversionAmount (gate #4)', () => {
+describe('accessibleConversionAmount (gate #4, M8 unlock rule)', () => {
+  it('M8: the taxable portion opens at the EARLIER of +5 tax years or the ceil(59.5) year', () => {
+    const c = { year: 2026, amount: 50_000, taxablePortion: 50_000 };
+    // conversion at 57: age rule wins — accessible at 60 (2029), not 62 (2031)
+    expect(accessibleConversionAmount(c, 2028, 59)).toBe(0);
+    expect(accessibleConversionAmount(c, 2029, 60)).toBe(50_000);
+    expect(conversionUnlockYear(2026, 57)).toBe(2029);
+    // conversion at 50: the 5-year clock wins — accessible at 55
+    expect(conversionUnlockYear(2026, 50)).toBe(2031);
+    expect(accessibleConversionAmount(c, 2030, 54)).toBe(0);
+    expect(accessibleConversionAmount(c, 2031, 55)).toBe(50_000);
+    // conversion at 65: immediately accessible — the clock only ever gated the penalty
+    expect(accessibleConversionAmount(c, 2026, 65)).toBe(50_000);
+    expect(conversionUnlockYear(2026, 65)).toBe(2026);
+  });
+
+
   const c = { year: 2024, amount: 50_000, taxablePortion: 30_000 };
 
   it('nontaxable portion is accessible immediately; taxable after 5 tax years', () => {
-    expect(accessibleConversionAmount(c, 2026)).toBe(20_000);
-    expect(accessibleConversionAmount(c, 2028)).toBe(20_000);
-    expect(accessibleConversionAmount(c, 2029)).toBe(50_000);
+    expect(accessibleConversionAmount(c, 2026, 45)).toBe(20_000);
+    expect(accessibleConversionAmount(c, 2028, 47)).toBe(20_000);
+    expect(accessibleConversionAmount(c, 2029, 48)).toBe(50_000);
   });
 
   it('backdoor conversions (taxablePortion 0) are never locked', () => {
-    expect(accessibleConversionAmount({ year: 2026, amount: 7_000, taxablePortion: 0 }, 2026)).toBe(
+    expect(accessibleConversionAmount({ year: 2026, amount: 7_000, taxablePortion: 0 }, 2026, 45)).toBe(
       7_000,
     );
   });

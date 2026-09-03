@@ -65,13 +65,33 @@ export function rothEarningsOpen(
 }
 
 /**
- * Gate #4: the accessible amount of one conversion in a given year — the
- * nontaxable portion immediately, the taxable portion after 5 tax years.
+ * Gate #4, corrected at the M8 plan approval: the accessible amount of one
+ * conversion in a given year — the nontaxable portion immediately, the
+ * taxable portion at the EARLIER of five tax years after conversion or the
+ * year the owner reaches ⌈59.5⌉. The 5-year conversion clock only ever gates
+ * the 10% early-withdrawal penalty, which never applies past 59½. (The
+ * separate 5-year rule on Roth EARNINGS — rothEarningsOpen — is unchanged.)
  */
-export function accessibleConversionAmount(c: RothConversion, inYear: number): number {
+export function accessibleConversionAmount(
+  c: RothConversion,
+  inYear: number,
+  ownerEndOfYearAge: number,
+): number {
   const nontaxable = c.amount - c.taxablePortion;
-  const taxableOpen = inYear >= c.year + ROTH_SEASONING_YEARS;
+  const taxableOpen =
+    inYear >= c.year + ROTH_SEASONING_YEARS ||
+    ownerEndOfYearAge >= Math.ceil(PRETAX_ACCESS_AGE);
   return nontaxable + (taxableOpen ? c.taxablePortion : 0);
+}
+
+/**
+ * M8: the calendar year a conversion made in `inYear` (owner's end-of-year
+ * age `ownerAge`) becomes fully accessible, per the rule above.
+ */
+export function conversionUnlockYear(inYear: number, ownerAge: number): number {
+  const ceil = Math.ceil(PRETAX_ACCESS_AGE);
+  if (ownerAge >= ceil) return inYear;
+  return Math.min(inYear + ROTH_SEASONING_YEARS, inYear + (ceil - ownerAge));
 }
 
 /** SPEC §2: 73 for those born 1951–59, 75 for 1960+. Consumed by rmd.ts (M10). */

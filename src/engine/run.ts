@@ -26,6 +26,7 @@ import {
 } from './accumulate';
 import { PRETAX_ACCESS_AGE } from './defaults';
 import { withdrawYear } from './drawdown';
+import { convertYear } from './ladder';
 import { resolveOneTime, resolveSchedule } from './schedule';
 import {
   marginalOrdinaryTax,
@@ -106,7 +107,7 @@ function accessibleAte(
 
     accessible += s.rothIra.basis;
     for (const c of s.rothIra.conversions) {
-      const open = accessibleConversionAmount(c, year);
+      const open = accessibleConversionAmount(c, year, ageF);
       accessible += open;
       lockedSum += c.amount - open;
     }
@@ -221,6 +222,8 @@ export function simulateRun(
     let grossNeedOut: number | undefined;
     let unmet: number | undefined;
     let withdrawals: RunYear['withdrawals'];
+    let bySource: RunYear['withdrawalsBySource'];
+    let ladderYear: RunYear['ladder'];
     let gap = false;
 
     if (age < D) {
@@ -310,9 +313,16 @@ export function simulateRun(
       grossNeedOut = grossNeed;
       unmet = result.unmet;
       withdrawals = result.withdrawals;
+      bySource = result.bySource;
       gap = result.gap;
       if (gap && firstGapAge === null) firstGapAge = age;
       lifetimeAfterTaxSpending += grossNeed - result.unmet;
+
+      // M8: ladder conversions AFTER withdrawals — spending first, fill rows
+      // take the bracket room that is left (plan amendment #2)
+      const conv = convertYear(ctx, t, w, events);
+      taxPaid += conv.taxPaid;
+      ladderYear = conv.ladder ?? undefined;
 
       taxPaid += growYear(ctx, t, 'drawdown');
       applyWindfalls(ctx, t, events);
@@ -354,6 +364,8 @@ export function simulateRun(
     row.grossNeed = grossNeedOut;
     row.unmet = unmet;
     row.withdrawals = withdrawals;
+    row.withdrawalsBySource = bySource;
+    row.ladder = ladderYear;
     row.gap = gap;
     Object.assign(row, accessibleAte(ctx, t, access));
     // M7 bracket mode: the year's ordinary income, its bracket tax, and the
@@ -389,6 +401,7 @@ export function simulateRun(
     notes,
     access,
     drawdownStartAge: D,
+    ateRate: ctx.ateRate ?? preTaxWithdrawalRate(a),
     summary: {
       lifetimeAfterTaxSpending,
       terminalAte: years[years.length - 1].totalAte,

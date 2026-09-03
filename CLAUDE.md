@@ -19,6 +19,7 @@ Vite + React + TypeScript, Tailwind, ECharts (echarts-for-react), Vitest. Pure c
 - All money is computed in nominal dollars internally. Real vs nominal is a display concern. Real return = (1+r)/(1+i) − 1.
 - Do not add scope beyond SPEC.md. If something seems necessary, propose it in the gate report.
 - Gate report format: what was built; test count and status; how to run it; exactly what to check; any assumption made that isn't in the spec.
+- The spec section for a milestone is updated to match what was built before its gate report.
 - When a gate approval includes fixes, land them in their own commit and report the verification numbers before starting the next milestone.
 - UI milestones require a green e2e suite at 100% manifest coverage (e2e/COVERAGE.md) and an exploratory browser QA pass with console-error monitoring before the gate report.
 - UI tests must assert user-visible outcomes (element positions, rendered text, what's on screen after a real pointer/scroll/keyboard interaction), not internal state or programmatic APIs. If a feature can fail by hand while its test passes, the test is wrong and gets rewritten alongside the fix.

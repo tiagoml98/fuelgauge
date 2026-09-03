@@ -20,14 +20,16 @@ import { Fragment, useMemo, useState } from 'react';
 import { strategyHasSpending } from '../../engine/metrics';
 import {
   equalTakeHomePair,
+  ladderBridgePair,
   reduceContributionTo,
   retireAt,
   stopContributingAt,
   stressFirstDrawdownYears,
 } from '../../engine/presets';
 import { resolveDrawdownStart, simulateRun } from '../../engine/run';
+import { formatSpans as fmtSpansForNote } from './lens';
 import type { GrowthScenario, WithdrawalStrategy } from '../../engine/types';
-import { useCompareGrid, type CompareCell } from '../../state/derived';
+import { firstCrossover, useCompareGrid, type CompareCell } from '../../state/derived';
 import { useSelectedScenario, useSelectedStrategy, useStore } from '../../state/store';
 import { AssumptionsPanel } from '../components/AssumptionsPanel';
 import { RUN_COLORS } from '../theme/colors';
@@ -97,6 +99,8 @@ export function CompareTab() {
   const [reduceAge, setReduceAge] = useState(45);
   const [retireA, setRetireA] = useState(55);
   const [retireB, setRetireB] = useState(65);
+  const [ladderAmount, setLadderAmount] = useState(40_000);
+  const [ladderFrom, setLadderFrom] = useState(45);
   const [sortBy, setSortBy] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const lens = (key: 'real' | 'ate') => (v: boolean) =>
     dispatch({ type: 'patchDisplay', patch: { [key]: v } });
@@ -177,6 +181,39 @@ export function CompareTab() {
           : `With flat rates and non-binding limits there is no crossover: traditional ends at exactly ${ratioPct}% of Roth's after-tax value at every age. Only the rate comparison matters.`;
     }
     spawn(note, [traditional, roth], []);
+  };
+
+  // M8 (SPEC §9-2.4): outside-money bridge vs conversion ladder — with the
+  // honest breakeven explanation, including the valuation-lens disclosure
+  const ladderBridge = () => {
+    const { outside, ladder } = ladderBridgePair(strategy, ladderAmount, ladderFrom);
+    const runOut = simulateRun(a, scenario, outside);
+    const runLad = simulateRun(a, scenario, ladder);
+    const breakeven = firstCrossover(runOut, runLad, a, d.real);
+    const lockedYears = (r: typeof runOut) =>
+      r.summary.spans.filter((sp) => sp.kind === 'locked').reduce((n, sp) => n + sp.to - sp.from + 1, 0);
+    const lockedBefore = lockedYears(runOut);
+    const lockedAfter = lockedYears(runLad);
+    const convYears = runLad.years.filter((y) => y.ladder !== undefined);
+    const totConv = convYears.reduce((n, y) => n + (y.ladder?.converted ?? 0), 0);
+    const convRate = totConv > 0.005 ? convYears.reduce((n, y) => n + (y.ladder?.tax ?? 0), 0) / totConv : 0;
+    const pctf = (v: number) => `${Math.round(v * 1000) / 10}%`;
+    const valuation =
+      Math.abs(runLad.ateRate - convRate) < 0.0005
+        ? 'Pre-tax is valued at the same rate the conversions pay, so the lens is neutral here.'
+        : `Note the lens: pre-tax is valued at ${pctf(runLad.ateRate)}; conversions taxed at ${pctf(convRate)} appear as an immediate ATE ${runLad.ateRate > convRate ? 'gain' : 'loss'} of ${Math.abs(Math.round((runLad.ateRate - convRate) * 100))}¢ per dollar converted — part of any crossover reflects this valuation rule, not only economics.`;
+    const access =
+      lockedAfter < lockedBefore
+        ? `Access drives it: the ladder turns ${lockedBefore - lockedAfter} locked year${lockedBefore - lockedAfter === 1 ? '' : 's'} into funded ones (${fmtSpansForNote(runLad.summary.spans, a.horizonAge)}).`
+        : lockedBefore === 0
+          ? 'No locked years either way — access adds nothing; only the rate gap can justify converting.'
+          : 'The ladder does not reduce the locked years here.';
+    const rate = `Conversions pay ${pctf(convRate)} vs your ${pctf(a.marginalRateNow)} marginal-now; paying tax early from outside money also gives up its growth.`;
+    const be =
+      breakeven !== null
+        ? `Breakeven at ${breakeven} — before it the outside-money path is ahead, after it the ladder is.`
+        : 'No breakeven by the horizon: the paths never cross — the cost side outweighs the gains (or vice versa from the start).';
+    spawn(`${be} ${access} ${rate} ${valuation}`, [], [outside, ladder]);
   };
 
   const setHiddenScenarios = (ids: string[]) => dispatch({ type: 'setHidden', scenarios: ids });
@@ -382,7 +419,14 @@ export function CompareTab() {
           >
             Stress first 3 drawdown years
           </Button>
-          <span className="text-neutral-400">ladder bridge arrives in Phase 2</span>
+          <span className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={ladderBridge}>
+              Ladder bridge vs outside money
+            </Button>
+            <MoneyInput className="w-24" value={ladderAmount} min={0} onCommit={setLadderAmount} aria-label="Ladder preset amount" />
+            <span className="text-neutral-400">/yr from</span>
+            <AgeInput className="w-16" value={ladderFrom} onCommit={setLadderFrom} aria-label="Ladder preset from age" />
+          </span>
         </div>
         {presetNote && (
           <p className="rounded-md bg-neutral-50 p-2 text-xs leading-5 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300" data-testid="preset-note">

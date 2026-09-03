@@ -309,12 +309,32 @@ export type WithdrawalSource =
   | 'rothEarnings'
   | 'hsa';
 
-/** P2 (M8): either a fixed $ amount or fill-to-top-of-bracket. */
+/**
+ * M8: either a fixed $ amount (today's $, indexed at the start-of-year
+ * exponent) or fill-to-top-of-bracket (bracket mode only). Rows are ADDITIVE
+ * and processed in order; they act only during drawdown years — conversions
+ * while working at the marginal-now rate are rarely sensible (ASSUMPTIONS).
+ */
 export interface ConversionLadderRow {
   fromAge: number;
   toAge: number | null;
   amount?: number;
   fillToBracketPct?: number;
+}
+
+/**
+ * M8: one drawdown year's ladder activity. poolBeforeConversion is the
+ * ordinary-income pool AFTER spending withdrawals (spending first,
+ * conversions fill what's left). paidFrom.conversion is the withheld amount
+ * (tranche reduced), penalized 10% before the owner's ceil(59.5) year.
+ */
+export interface LadderYear {
+  poolBeforeConversion: number;
+  converted: number;
+  tax: number;
+  paidFrom: { cash?: number; taxable?: number; conversion?: number };
+  penalty: number;
+  unlockYear: number;
 }
 
 export interface WithdrawalStrategy {
@@ -359,6 +379,7 @@ export interface BalanceSnapshot {
 
 export type MarkerEventKind =
   | 'windfall'
+  | 'conversion'
   | 'contributionChange'
   | 'returnChange'
   | 'drawdownStart'
@@ -424,6 +445,14 @@ export interface RunYear {
   ordinaryIncome?: number;
   ordinaryTax?: number;
   effectiveOrdinaryRate?: number;
+  /** M8: this year's conversion-ladder activity (absent when none). */
+  ladder?: LadderYear;
+  /**
+   * M8: NET amounts by withdrawal SOURCE (rothBasis vs seasonedConversions vs
+   * rothEarnings are distinct here though they share the rothIra account).
+   * Sums to need − unmet. Drives the bridge visualizer's source stack.
+   */
+  withdrawalsBySource?: Partial<Record<WithdrawalSource, number>>;
   events: MarkerEvent[];
 }
 
@@ -456,6 +485,12 @@ export interface RunResult {
   access: AccessMap;
   /** Resolved from the auto rule when the strategy leaves it undefined (gate #15). */
   drawdownStartAge: number;
+  /**
+   * M8: the pre-tax ATE valuation rate this run used (bracket mode; the flat
+   * effective+state in simple mode) — the preset's honest note discloses the
+   * valuation-lens effect with it.
+   */
+  ateRate: number;
   summary: RunSummary;
 }
 

@@ -140,6 +140,36 @@ printSection("REAL (today's $)", realize(nominalValue));
 printSection("ATE (real, today's $)", realize(ateNominalValue));
 
 if (run) {
+  // M8: one row per conversion year — the gate's hand-check figures
+  const ladderYears = years.filter((y) => y.ladder !== undefined);
+  if (ladderYears.length > 0) {
+    console.log('\n=== LADDER (nominal) ===');
+    console.log(
+      ['age', 'year'].map((h) => h.padStart(5)).join('') +
+        ['poolBefore', 'converted', 'convTax', 'paidCash', 'paidTaxable', 'withheld', 'penalty', 'unlock']
+          .map((c) => c.padStart(WIDTH))
+          .join(''),
+    );
+    for (const y of ladderYears) {
+      const l = y.ladder!;
+      const cells = [
+        l.poolBeforeConversion,
+        l.converted,
+        l.tax,
+        l.paidFrom.cash ?? 0,
+        l.paidFrom.taxable ?? 0,
+        l.paidFrom.conversion ?? 0,
+        l.penalty,
+      ];
+      console.log(
+        String(y.age).padStart(5) +
+          String(y.year).padStart(5) +
+          cells.map((v) => v.toFixed(2).padStart(WIDTH)).join('') +
+          String(l.unlockYear).padStart(WIDTH),
+      );
+    }
+  }
+
   const drawYears = years.filter((y) => y.withdrawals !== undefined);
   if (drawYears.length > 0) {
     console.log('\n=== WITHDRAWALS (nominal, gross, per account) ===');

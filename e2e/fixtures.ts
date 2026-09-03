@@ -32,7 +32,9 @@ export { expect };
 export const encodeState = (state: unknown): string =>
   compressToEncodedURIComponent(JSON.stringify(state));
 
-export function exampleState(name: 'golden' | 'spotcheck' | 'drawdown' | 'bracket'): PersistedState {
+export function exampleState(
+  name: 'golden' | 'spotcheck' | 'drawdown' | 'bracket' | 'ladder' | 'ladder-motivation-a' | 'ladder-motivation-b',
+): PersistedState {
   return JSON.parse(readFileSync(`examples/${name}.json`, 'utf8')) as PersistedState;
 }
 

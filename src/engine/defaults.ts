@@ -119,6 +119,8 @@ export const HSA_CATCH_UP_AGE = 55;
 export const HSA_CONTRIBUTION_STOP_AGE = 65;
 /** M6.2 #2: nonqualified HSA withdrawals before 65 pay this on top of ordinary income. */
 export const HSA_NONQUALIFIED_PENALTY = 0.2;
+/** M8: early-withdrawal penalty on conversion-tax withholding before ceil(59.5). */
+export const EARLY_WITHDRAWAL_PENALTY = 0.1;
 export const HSA_PENALTY_ENDS_AGE = 65;
 
 // ---------------------------------------------------------------------------

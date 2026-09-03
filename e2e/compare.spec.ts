@@ -171,7 +171,7 @@ test('stop/reduce/stress presets produce normalized rows — never overrides', a
     { fromAge: 47, toAge: 47, value: 0 },
     { fromAge: 48, toAge: null, value: 0.0712 },
   ]);
-  await expect(page.getByText('ladder bridge arrives in Phase 2')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ladder bridge vs outside money' })).toBeVisible();
 });
 
 test('baseline picker drives the delta table; mockup routes are gone', async ({ page }) => {

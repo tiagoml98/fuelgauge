@@ -234,5 +234,5 @@ test('rate-arbitrage panel shows both rates and the verdict', async ({ page }) =
   await expect(panel).toContainText('24%');
   await expect(panel).toContainText('12%');
   await expect(panel).toContainText('traditional wins');
-  await expect(panel).toContainText('Phase 2 ladder');
+  await expect(panel).toContainText('no ladder rows');
 });

@@ -142,3 +142,29 @@ export function stressFirstDrawdownYears(
   ];
   return out;
 }
+
+/**
+ * M8 (SPEC §9-2.4): "convert $X/yr from Y vs don't". Two strategy clones —
+ * the pure outside-money bridge and the same strategy with ladder rows
+ * converting $X/yr (today's $) from age Y through 59 (past 59 access is no
+ * longer the motive; the RMD-motivated variant arrives in M10).
+ */
+export function ladderBridgePair(
+  w: WithdrawalStrategy,
+  amount: number,
+  fromAge: number,
+): { outside: WithdrawalStrategy; ladder: WithdrawalStrategy } {
+  const outside: WithdrawalStrategy = {
+    ...structuredClone(w),
+    name: 'Outside-money bridge (no ladder)',
+    ladder: [],
+  };
+  const ladder: WithdrawalStrategy = {
+    ...structuredClone(w),
+    name: `Ladder: convert $${amount.toLocaleString('en-US')}/yr from ${fromAge}`,
+    // through 59 for bridge ladders; open-ended when started at 60+ (the
+    // access motive is gone there — bracket smoothing, formalized in M10)
+    ladder: [{ fromAge, toAge: fromAge > 59 ? null : 59, amount }],
+  };
+  return { outside, ladder };
+}

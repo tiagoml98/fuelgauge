@@ -42,7 +42,7 @@ fuelgauge/
 ├── index.html, vite.config.ts, tsconfig.json, package.json, tailwind config
 ```
 
-Phase 2 lands inside existing modules (bracket tables in `tax.ts` M7, ladder as `ladder.ts` M8, mega-backdoor in `accumulate.ts` M9, RMDs as `rmd.ts` M10) — types reserve the fields from M1 so nothing reshapes later.
+Phase 2 lands inside existing modules (bracket tables in `tax.ts` M7 ✓, ladder in `ladder.ts` M8 ✓ — convertYear: rows→tranches, the cash→taxable→withheld tax waterfall, the earlier-of unlock rule, mega-backdoor in `accumulate.ts` M9, RMDs as `rmd.ts` M10) — types reserve the fields from M1 so nothing reshapes later.
 
 ## 2. Core types (sketch)
 

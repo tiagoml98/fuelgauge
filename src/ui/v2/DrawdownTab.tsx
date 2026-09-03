@@ -85,6 +85,22 @@ export function DrawdownTab() {
       />
       <ResizablePanel>
         <main className="col-scroll h-full space-y-4 overflow-y-auto pl-4 pr-2" data-testid="drawdown-column">
+          {run && run.years.some((y) => (y.ladder?.paidFrom.conversion ?? 0) > 0.005) && (
+            <p
+              role="status"
+              data-testid="ladder-withheld-warning"
+              className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+            >
+              {(() => {
+                const ys = run.years.filter((y) => (y.ladder?.paidFrom.conversion ?? 0) > 0.005);
+                const totalWithheld = ys.reduce((s2, y) => s2 + (y.ladder?.paidFrom.conversion ?? 0), 0);
+                const totalPenalty = ys.reduce((s2, y) => s2 + (y.ladder?.penalty ?? 0), 0);
+                const span = ys.length === 1 ? `year ${ys[0].age}` : `years ${ys[0].age}–${ys[ys.length - 1].age}`;
+                return `Nothing left in cash/taxable to pay conversion tax in ${span} — ${fmtMoney0(totalWithheld)} withheld from the conversions themselves${totalPenalty > 0.005 ? ` (10% early-withdrawal penalty: ${fmtMoney0(totalPenalty)})` : ''}. The ladder still runs, but it is eating itself; fund it from outside money if you can.`;
+              })()}
+            </p>
+          )}
+
           {errors.length > 0 && (
             <p
               role="status"

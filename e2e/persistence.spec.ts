@@ -151,6 +151,10 @@ function maximalState(): PersistedState {
     drawdownStartAge: 55,
     spending: [{ fromAge: 0, toAge: null, value: 60_000 }],
     medical: [{ fromAge: 65, toAge: null, value: 8_000 }], // M6.2 #2 round-trip
+    ladder: [
+      { fromAge: 55, toAge: 59, amount: 30_000 },
+      { fromAge: 56, toAge: null, fillToBracketPct: 0.12 },
+    ], // M8 round-trip: both row shapes
 
     oneTimeExpenses: [{ age: 60, amount: 30_000, label: 'roof' }],
     income: [{ kind: 'socialSecurity', fromAge: 67, toAge: null, amount: 28_000, label: 'SS' }],

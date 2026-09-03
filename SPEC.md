@@ -106,6 +106,15 @@ Fix take-home cost C. Path A: min(limit, C ÷ (1 − t_now)) pre-tax, remainder 
 - Windfalls entered after tax; HSA "medical" assumes qualified expenses ≥ balance; 401k → IRA rollover at drawdown start; backdoor pro-rata rule if any Traditional IRA balance
 - **Prominent:** educational model, simplifying assumptions, not tax advice — confirm real decisions with a CPA.
 
+### 10.1 Conversion ladder (as built, M8)
+
+- Ladder rows live on the withdrawal strategy: `{from, to, $ amount}` (today's $, indexed at the start-of-year exponent) or `{from, to, fill to top of N% bracket}` (bracket mode only — skipped with a note in simple mode). Rows are ADDITIVE and processed in order; they act only during drawdown years.
+- Ordering within a year: rollovers → income (seeds the ordinary pool) → spending withdrawals → **conversions** → growth. Fill-to-bracket fills the room remaining AFTER spending withdrawals — spending is never pushed into a higher bracket by a conversion.
+- Conversions draw filer 1 then filer 2, trad401k before tradIra (match and nondeductible basis reduced pro-rata; the tranche still carries taxablePortion = amount — conservative). The tranche lands in that filer's Roth IRA and starts the Roth clock if none exists.
+- Conversion tax: bracket mode = marginal slices on the year's pool (it IS ordinary tax and appears in the computed effective rate); simple mode = flat effective + state. Paid from **cash first, then taxable** (the sale pays LTCG on its gain portion); with neither left the tax is **withheld from the conversion itself** — W = shortfall ÷ (1 − 10%) with the 10% early-withdrawal penalty before the owner's ⌈59.5⌉ year, no penalty after — shrinking the tranche and raising an explicit in-app warning.
+- Unlock rule: a tranche's taxable portion is accessible at the **earlier of** five tax years after conversion **or** the year the owner reaches ⌈59.5⌉ — the conversion clock only ever gates the penalty. (The separate 5-year rule on Roth EARNINGS is unchanged.)
+- The bridge visualizer stacks funded years by source — outside money (cash + taxable), seasoned conversions, other sources — per §9-2.3. The preset "Ladder bridge vs outside money" spawns both strategies as experiments; its note states the breakeven age (or its absence), which driver produced it (access vs rates vs the cost of early tax), and the valuation-lens effect: pre-tax is valued at the run's ATE rate, so conversions taxed below/above it appear as an immediate ATE gain/loss per dollar.
+
 ## 11. Out of scope — do not build
 Monte Carlo or any probabilistic engine; IRMAA; ACA subsidy modeling; 72(t)/SEPP; survivor brackets; estate / 10-year rule; tax-law-change presets; mortgage; NIIT; phase-outs; asset-allocation modeling (the return schedule stands in for it); taxing windfalls.
 

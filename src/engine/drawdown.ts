@@ -18,7 +18,7 @@
 
 import { accessOpen, rothEarningsOpen } from './access';
 import { rothIraTotal, type FilerState, type SimContext } from './accumulate';
-import { HSA_NONQUALIFIED_PENALTY, HSA_PENALTY_ENDS_AGE, ROTH_SEASONING_YEARS } from './defaults';
+import { HSA_NONQUALIFIED_PENALTY, HSA_PENALTY_ENDS_AGE, PRETAX_ACCESS_AGE, ROTH_SEASONING_YEARS } from './defaults';
 import {
   grossFromNet,
   grossOrdinaryFromNet,
@@ -33,6 +33,8 @@ const EPS = 0.005; // sub-cent
 export interface WithdrawResult {
   /** Gross amounts drawn per account (incl. tax gross-up). */
   withdrawals: Partial<Record<AccountId, number>>;
+  /** M8: NET amounts by order SOURCE — sums to netNeed − unmet exactly. */
+  bySource: Partial<Record<WithdrawalSource, number>>;
   taxPaid: number;
   /** Unfunded remainder of the net need. */
   unmet: number;
@@ -55,11 +57,15 @@ export function withdrawYear(
   const saleRate = taxableSaleRate(a);
 
   const withdrawals: Partial<Record<AccountId, number>> = {};
+  const bySource: Partial<Record<WithdrawalSource, number>> = {};
   let taxPaid = 0;
   let remaining = netNeed;
 
   const record = (id: AccountId, gross: number) => {
     withdrawals[id] = (withdrawals[id] ?? 0) + gross;
+  };
+  const recordSource = (source: WithdrawalSource, net: number) => {
+    if (net > EPS) bySource[source] = (bySource[source] ?? 0) + net;
   };
 
   // (a) qualified pass: the medical slice comes out of the HSA first,
@@ -74,6 +80,7 @@ export function withdrawYear(
         qualifiedLeft -= w;
         remaining -= w;
         record('hsa', w);
+        recordSource('hsa', w);
       }
     }
   }
@@ -121,7 +128,7 @@ export function withdrawYear(
   const drawPreTaxAccount = (s: FilerState, id: 'trad401k' | 'tradIra') => {
     const balance = id === 'trad401k' ? s.trad401k : s.tradIra;
     const basis = id === 'tradIra' ? s.tradIraBasis : 0;
-    const { gross } = drawOrdinary(balance, basis);
+    const { gross, net } = drawOrdinary(balance, basis);
     if (gross <= 0) return;
     if (id === 'trad401k') {
       s.matchTrad = Math.max(0, s.matchTrad - gross * (s.matchTrad / balance));
@@ -131,6 +138,7 @@ export function withdrawYear(
       s.tradIra -= gross;
     }
     record(id, gross);
+    recordSource('preTax', net);
   };
 
   for (const source of order) {
@@ -142,16 +150,18 @@ export function withdrawYear(
           ctx.cash -= w;
           remaining -= w;
           record('cash', w);
+          recordSource('cash', w);
         }
         break;
       }
       case 'taxable': {
         const balance = ctx.taxable;
-        const { gross } = drawTaxed(balance, ctx.taxableBasis, saleRate);
+        const { gross, net } = drawTaxed(balance, ctx.taxableBasis, saleRate);
         if (gross > 0) {
           ctx.taxableBasis -= gross * (ctx.taxableBasis / balance);
           ctx.taxable -= gross;
           record('taxable', gross);
+          recordSource('taxable', net);
         }
         break;
       }
@@ -176,23 +186,30 @@ export function withdrawYear(
             s.rothIra.basis -= w;
             remaining -= w;
             record('rothIra', w);
+            recordSource('rothBasis', w);
           }
         }
         break;
       }
       case 'seasonedConversions': {
         // Oldest first; taxable-first inside each conversion (gate #4): the
-        // taxable portion once seasoned, the nontaxable portion immediately.
-        for (const s of ctx.filers) {
+        // taxable portion once seasoned OR the owner is past ceil(59.5) — the
+        // 5-year clock only gates the penalty (M8 rule); nontaxable immediately.
+        for (let f = 0; f < ctx.filers.length; f++) {
+          const s = ctx.filers[f];
           const sorted = [...s.rothIra.conversions].sort((x, y) => x.year - y.year);
           for (const c of sorted) {
             if (remaining <= EPS) break;
-            if (year >= c.year + ROTH_SEASONING_YEARS && c.taxablePortion > 0) {
+            if (
+              (year >= c.year + ROTH_SEASONING_YEARS || ages[f] >= Math.ceil(PRETAX_ACCESS_AGE)) &&
+              c.taxablePortion > 0
+            ) {
               const w = Math.min(c.taxablePortion, remaining);
               c.taxablePortion -= w;
               c.amount -= w;
               remaining -= w;
               record('rothIra', w);
+              recordSource('seasonedConversions', w);
             }
             const nontaxable = c.amount - c.taxablePortion;
             if (remaining > EPS && nontaxable > 0) {
@@ -200,6 +217,7 @@ export function withdrawYear(
               c.amount -= w;
               remaining -= w;
               record('rothIra', w);
+              recordSource('seasonedConversions', w);
             }
           }
         }
@@ -216,6 +234,7 @@ export function withdrawYear(
               s.rothIra.earnings -= w;
               remaining -= w;
               record('rothIra', w);
+              recordSource('rothEarnings', w);
             }
           }
         }
@@ -228,10 +247,11 @@ export function withdrawYear(
         for (let f = 0; f < ctx.filers.length && remaining > EPS; f++) {
           const s = ctx.filers[f];
           if (!accessOpen(ages[f], access[f]?.hsa)) continue;
-          const { gross } = drawOrdinary(s.hsa, 0);
+          const { gross, net } = drawOrdinary(s.hsa, 0);
           if (gross > 0) {
             s.hsa -= gross;
             record('hsa', gross);
+            recordSource('hsa', net);
           }
         }
         break;
@@ -252,20 +272,22 @@ export function withdrawYear(
         qualifiedLeft -= freeNet;
         remaining -= freeNet;
         record('hsa', freeNet);
+        recordSource('hsa', freeNet);
       }
       if (remaining <= EPS || s.hsa <= EPS) continue;
       // nonqualified: ordinary income (+ state), +20% penalty before 65
       const penalty = ages[f] < HSA_PENALTY_ENDS_AGE ? HSA_NONQUALIFIED_PENALTY : 0;
-      const { gross } = drawOrdinary(s.hsa, 0, penalty);
+      const { gross, net } = drawOrdinary(s.hsa, 0, penalty);
       if (gross > 0) {
         s.hsa -= gross;
         record('hsa', gross);
+        recordSource('hsa', net);
       }
     }
   }
 
   const unmet = Math.max(0, remaining);
-  return { withdrawals, taxPaid, unmet, gap: unmet > EPS };
+  return { withdrawals, bySource, taxPaid, unmet, gap: unmet > EPS };
 }
 
 /** Total conversion principal still sitting in a filer's Roth IRA. */

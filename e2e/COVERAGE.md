@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -70,7 +70,7 @@ server can never be silently reused.
 | growthScenarios[].windfalls (incl. filer owner) | PS:maximal (rothIra target, filer 1) |
 | growthScenarios[].returnScheduleOverride | PS:maximal |
 | strategies[].id/name/drawdownStartAge/spending/oneTimeExpenses/income/order | PS:maximal (all non-default incl. reordered order + SS row) |
-| strategies[].ladder (P2, optional) | PS:maximal (absent — absence round-trips) |
+| strategies[].ladder (M8) | PS:maximal (both row shapes) · LD:editor (add/edit both shapes, round-trip) |
 | display.real / ate / byBuckets | PS:maximal · LN (each toggle) |
 | display.theme | PS:maximal · LN:theme |
 | display.yearlyTable | PS:maximal · LN:yearly |
@@ -164,7 +164,7 @@ table/tooltip/bridge equality).
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2) — 25/25
+## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2 + M8) — 30/30
 
 `DD` = drawdown.spec. All under the console guard.
 
@@ -195,8 +195,13 @@ table/tooltip/bridge equality).
 | Chart structure: buckets = 4 aggregate series (structurally seamless), accounts = per-account with year-step (M6.1 #1) | DD:bucket-series (data-series artifact both modes) |
 | Medical slice editor "Medical spending (part of total)" (renamed M6.3) — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
 | HSA last resort — funded past pot-death, depleted only at HSA zero (M6.2 #2) | DD:hsa-last-resort (spans text, taxed draw in table, gap only at 89) + engine shape tests |
+| Conversion-ladder rows editor (M8): type select $/fill, from/to, add/delete, simple-mode fill hint | LD:editor |
+| Ladder withheld warning (M8): amber notice with withheld total + 10% penalty when cash/taxable are exhausted | LD:before-after-a + engine waterfall tests |
+| Rate panel conversion column (M8): avg conversion rate over ladder years fills the middle slot | LD:hand-check (engine-derived %) |
+| Bridge source stack (M8, SPEC §9-2.3): outside money / seasoned conversions / other + legend + data-bridge-sources artifact | LD:bridge-sources (conversions take over at the unlock year) |
+| Conversion chart marker at N + crosshair event line | LD:hand-check (marker artifact kind 'conversion') |
 
-## 5. Compare-tab controls (M6 re-audit + M6.1 + M7) — 23/23
+## 5. Compare-tab controls (M6 re-audit + M6.1 + M7 + M8) — 24/24
 
 `CP` = compare.spec, `CM` = compare-manage.spec. All under the console guard.
 
@@ -211,6 +216,7 @@ table/tooltip/bridge equality).
 | Delta table (signed, lens rule; never a self-delta) | CP:hand-case · CP:baseline-deltas · CM:single-cell (absent with 1) |
 | Preset: Traditional vs Roth equal take-home + §8 driver note | CP:equal-take-home + unit presets tests |
 | Preset note, bracket mode (M7): computed average rates per path, no constant-ratio claim | BR:preset-note |
+| Ladder preset (M8, SPEC §9-2.4): amount + from-age inputs, spawns outside/ladder pair as experiments; honest note — breakeven age or its absence, access/rate/cost drivers, valuation-lens disclosure (bracket) or lens-neutral statement (simple) | LD:before-after-b (breakeven 49, spans 11→1 locked) · LD:valuation-lens |
 | Preset: stop contributing at X (age input) | CP:normalized-presets |
 | Preset: reduce 401k to Y at Z (two inputs) | CP:normalized-presets |
 | Preset: retire at X vs Y (two inputs) | CP:retire-pair |
@@ -228,4 +234,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 285/285 items covered (73 state fields + 71 VARIABLES rows + 92 Growth + 25 Drawdown + 23 Compare + 1 route-removal check). M8 pre-work: +2 items (rate-panel first-pre-tax/average + never-retires; the preset guard folds into the existing equal-take-home row). M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**
+**Manifest: 291/291 items covered (73 state fields + 71 VARIABLES rows + 92 Growth + 30 Drawdown + 24 Compare + 1 route-removal check). M8 pre-work: +2; M8 re-audit: +5 Drawdown items (ladder editor, withheld warning, conversion rate column, bridge source stack, conversion marker), +1 Compare item (ladder preset + honest note); strategies[].ladder flips from absence-pinned to populated round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

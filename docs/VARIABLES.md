@@ -156,7 +156,7 @@ All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0
 | One-time expense rows | Withdrawal | rows {age, amount, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need (M3) |
 | Retirement income rows | Withdrawal | rows {type: part-time \| pension \| social-security, from age, to age, $/yr, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need offset (M3). **Simple mode taxes them (gate #9): part-time and pension at the effective rate, Social Security at 85% × effective.** Bracket mode (M7): taxable slices (partTime/pension 100%, SS 85%) seed the year's ordinary pool; the deduction + brackets tax the total |
 | Withdrawal order | Withdrawal | ordered list of sources | n/a | **cash → invested taxable → pre-tax (once ≥ access age) → Roth basis → seasoned conversions → Roth earnings (once ≥ access age)**; HSA excluded under "medical" (gate #5 — corrects SPEC §1) | permutation | drawdown (M3). The access filter makes it self-adjusting: before access age, pre-tax is skipped and Roth basis fills the bridge; after, pre-tax goes first |
-| Conversion ladder rows *(P2)* | Withdrawal | rows {from, to, $} or {from, to, fill to top of N% bracket} | real | none | ≥ 0 | ladder (M8); taxablePortion = amount |
+| Conversion ladder rows | Withdrawal | rows {from, to, $} or {from, to, fill to top of N% bracket} — additive, in order, drawdown-only | real (start-of-year exponent) | none | ≥ 0; fill rows bracket-mode-only | ladder.ts (M8): convert pre-tax → Roth tranche {year, amount, taxablePortion = amount}; tax cash → taxable → withheld+10% pre-⌈59.5⌉; unlock at earlier of +5y or ⌈59.5⌉ (SPEC §10.1) |
 
 ## 4. Schedule semantics (SPEC §5)
 

@@ -67,7 +67,9 @@ const yearsFromNow = (y: RunYear) => y.age - startAge;
 const EXTRA = run ? (['need', 'wdrawn', 'gap'] as const) : ([] as const);
 // M7: bracket-mode runs get the year's ordinary income + computed rate
 const BRACKET = run && a.taxMode === 'bracket' ? (['ordInc', 'effRate'] as const) : ([] as const);
-const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax', ...EXTRA, ...BRACKET] as const;
+// M9: mega-backdoor dollars landed per year, when any
+const MEGA = years.some((y) => y.megaBackdoor !== undefined) ? (['mega'] as const) : ([] as const);
+const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax', ...EXTRA, ...BRACKET, ...MEGA] as const;
 type Col = (typeof COLS)[number];
 const WIDTH = 13;
 
@@ -90,6 +92,8 @@ function nominalValue(y: RunYear, col: Col): number | string {
       return wdTotal(y);
     case 'gap':
       return y.gap ? 'GAP' : '';
+    case 'mega':
+      return y.megaBackdoor ?? 0;
     case 'ordInc':
       return y.ordinaryIncome ?? 0;
     case 'effRate':
@@ -105,7 +109,7 @@ function ateNominalValue(y: RunYear, col: Col): number | string {
   if (col === 'total' || col === 'totalAte') return y.totalAte;
   if (
     col === 'tax' || col === 'cumTax' || col === 'need' || col === 'wdrawn' ||
-    col === 'gap' || col === 'ordInc' || col === 'effRate'
+    col === 'gap' || col === 'ordInc' || col === 'effRate' || col === 'mega'
   ) {
     return nominalValue(y, col);
   }

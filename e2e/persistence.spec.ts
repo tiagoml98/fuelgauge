@@ -108,6 +108,11 @@ function maximalState(): PersistedState {
       splitIraRothPct: 0.9,
       tradIraDeductible: false,
       backdoor: true,
+      // M9: both mega row shapes round-trip
+      megaBackdoor: [
+        { fromAge: 45, toAge: 54, amount: 20_000 },
+        { fromAge: 50, toAge: null, max: true },
+      ],
       match: {
         mode: 'flat',
         rate: 0.5,

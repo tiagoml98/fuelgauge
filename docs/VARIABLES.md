@@ -140,6 +140,7 @@ All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0
 | Match vesting % | Growth (per-filer match config, M1 #5) | % | 100% | 0–100% | accumulate: unvested fraction dropped at that filer's separation (M2) |
 | HSA contribution schedule (household) | Growth | schedule $/yr | real | empty | ≥ 0 | limits + accumulate (M2); auto-stops at 65 |
 | Invested taxable contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2); adds to cost basis |
+| Mega-backdoor rows — per filer | Growth | rows {from, to, fixed $ \| max} — additive | real (end-of-year) | none | fixed ≥ 0; capped by live 415(c) room (deferrals + match first, catch-ups outside) | accumulate (M9): Roth IRA tranche {year, amount, taxablePortion 0}, immediately accessible; gated by plan toggles (SPEC §10.2) |
 | Cash contribution schedule | Growth | schedule $/yr | real | empty | ≥ 0 | accumulate (M2) |
 | Mega-backdoor schedule *(P2)* | Growth | schedule $/yr | real | empty | ≥ 0, capped by 415(c) | accumulate (M9) |
 | Windfall rows | Growth | rows {age, after-tax $, target account, label, filer?} | **nominal** — field label: "amount that lands, in that year's dollars"; UI shows today's-$ equivalent beside it (gate #12) | none; target default = invested taxable; filer default = filer 1 (M2 gate #4, matters for per-filer targets) | amount ≥ 0 | accumulate (M2); adds to basis of target; chart markers (M4–M6) |

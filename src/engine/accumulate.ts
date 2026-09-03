@@ -25,6 +25,7 @@ import {
   capHouseholdHsa,
   clamp415c,
   matchAmount,
+  megaBackdoorRoom,
   resolveLimits,
 } from './limits';
 import { resolveSchedule } from './schedule';
@@ -89,6 +90,10 @@ export interface ResolvedFilerStreams {
   c401kRaw: number[];
   ira: number[];
   iraRaw: number[];
+  /** M9: Σ of the FIXED mega rows per year (indexed); max rows resolve at contribution time. */
+  megaFixed: number[];
+  /** M9: activity stream for start/stop markers (fixed $ raw + 1 per active max row). */
+  megaRaw: number[];
   separation: number | null;
   deductible: boolean;
 }
@@ -124,6 +129,8 @@ export interface SimContext {
   taxCtx?: { pool: number; table: BracketTable; stateRate: number };
   /** M7 bracket mode: the run's pre-tax ATE valuation rate (set by run.ts). */
   ateRate?: number;
+  /** M9: mega-backdoor dollars landed in the current year (all filers). */
+  megaThisYear?: number;
   /** One-time note keys already emitted. */
   noted: Set<string>;
   zeroed: AccountId[];
@@ -186,6 +193,18 @@ export function createSimContext(a: Assumptions, g: GrowthScenario): SimContext 
       c401kRaw: resolveSchedule(inputs.contrib401k, filerOpts(f, false)),
       ira: resolveSchedule(inputs.contribIra, filerOpts(f, true)),
       iraRaw: resolveSchedule(inputs.contribIra, filerOpts(f, false)),
+      // M9: rows are ADDITIVE (income-row cousin) — each fixed row resolves
+      // alone and sums; max rows contribute a presence sentinel to the raw
+      // activity stream (start/stop markers) and resolve to live room later
+      megaFixed: (inputs.megaBackdoor ?? [])
+        .filter((r) => r.amount !== undefined)
+        .map((r) => resolveSchedule([{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount! }], filerOpts(f, true)))
+        .reduce((sum, arr) => sum.map((v, i) => v + arr[i]), new Array<number>(n + 1).fill(0)),
+      megaRaw: (inputs.megaBackdoor ?? [])
+        .map((r) =>
+          resolveSchedule([{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount ?? 1 }], filerOpts(f, false)),
+        )
+        .reduce((sum, arr) => sum.map((v, i) => v + arr[i]), new Array<number>(n + 1).fill(0)),
       separation: separationAge(g, f, a.filers[f].currentAge, a.filers[f].currentAge + n),
       deductible:
         inputs.tradIraDeductible ?? !inputs.contrib401k.some((row) => row.value > 0), // gate #11 auto
@@ -286,6 +305,7 @@ export function growYear(
   phase: 'accumulation' | 'drawdown',
 ): number {
   const { a, returns } = ctx;
+  ctx.megaThisYear = 0; // yearly reset — growYear runs first in BOTH paths (M9)
   let taxPaid = 0;
   for (const s of ctx.filers) {
     s.trad401k *= 1 + returns.trad401k[t];
@@ -419,6 +439,32 @@ export function contributeYear(ctx: SimContext, t: number, events: MarkerEvent[]
       }
     }
 
+    // M9 (SPEC §10.2): mega-backdoor into the room left after deferrals +
+    // match (catch-ups sit outside 415(c)). Fixed rows request their indexed
+    // sum; a max row takes whatever room remains this year.
+    const megaRows = p.inputs.megaBackdoor ?? [];
+    const maxActive = megaRows.some(
+      (r) => r.max === true && ageF >= r.fromAge && (r.toAge === null || ageF <= r.toAge),
+    );
+    if (p.megaFixed[t] > 0 || maxActive) {
+      const eligible = a.afterTaxContributions && (a.inPlanConversion || a.inServiceWithdrawal);
+      if (!eligible) {
+        noteOnce(ctx, `megaDrop${f}`, events, age, `plan does not permit after-tax contributions / conversion — mega-backdoor rows ignored (filer ${f + 1})`);
+      } else if (!a.include.rothIra) {
+        noteOnce(ctx, `megaDropRoth${f}`, events, age, `mega-backdoor (filer ${f + 1}) dropped — Roth IRA excluded`);
+      } else {
+        const room = megaBackdoorRoom(base401kUsed, allowed, limitsY);
+        const landedFixed = Math.min(p.megaFixed[t], room);
+        const landed = maxActive ? room : landedFixed;
+        capNote(events, age, `mega-backdoor (filer ${f + 1})`, p.megaFixed[t], landedFixed);
+        if (landed > 0) {
+          s.rothIra.conversions.push({ year: a.currentYear + t, amount: landed, taxablePortion: 0 });
+          s.rothIra.firstFundedYear ??= a.currentYear + t;
+          ctx.megaThisYear = (ctx.megaThisYear ?? 0) + landed;
+        }
+      }
+    }
+
     // Separation: drop the unvested fraction at the last working age
     if (p.separation !== null && ageF === p.separation && m.vestingPct < 1) {
       const dropTrad = Math.min(s.matchTrad * (1 - m.vestingPct), s.trad401k);
@@ -546,6 +592,7 @@ export function emitStreamMarkers(ctx: SimContext, t: number, events: MarkerEven
   const streams: Array<[string, number[]]> = [
     ...ctx.perFiler.map((p, f): [string, number[]] => [`401k (filer ${f + 1})`, p.c401kRaw]),
     ...ctx.perFiler.map((p, f): [string, number[]] => [`IRA (filer ${f + 1})`, p.iraRaw]),
+    ...ctx.perFiler.map((p, f): [string, number[]] => [`mega-backdoor (filer ${f + 1})`, p.megaRaw]),
     ['HSA', ctx.hsaRaw],
     ['taxable', ctx.taxableRaw],
     ['cash', ctx.cashRaw],
@@ -616,6 +663,9 @@ export function takeSnapshot(
     taxPaidThisYear: taxPaid,
     cumulativeTax: ctx.cumulativeTax,
     gap: false,
+    ...(ctx.megaThisYear !== undefined && ctx.megaThisYear > 0.005
+      ? { megaBackdoor: ctx.megaThisYear }
+      : {}),
     events,
   };
 }

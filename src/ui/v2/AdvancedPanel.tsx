@@ -16,6 +16,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useMemo, type ReactNode } from 'react';
 import { DEFAULT_BRACKET_TABLES } from '../../engine/defaults';
+import { capFiler401k, clamp415c, matchAmount, megaBackdoorRoom } from '../../engine/limits';
+import { resolveSchedule } from '../../engine/schedule';
 import { coastFireAge } from '../../engine/metrics';
 import { toReal } from '../../engine/schedule';
 import type {
@@ -23,6 +25,7 @@ import type {
   Assumptions,
   BracketRow,
   BracketTable,
+  MegaBackdoorRow,
   EmployerMatch,
   FilerGrowthInputs,
   GrowthScenario,
@@ -437,6 +440,85 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
             <FieldRow label="Flat match" control={<MoneyInput value={pf.match.flatAmount} min={0} onCommit={(v) => patchMatch(f, { flatAmount: v })} aria-label={`Filer ${f + 1} flat match`} />} />
           )}
           <FieldRow label="Match vesting" description="unvested fraction dropped at separation" control={<PercentInput value={pf.match.vestingPct} onCommit={(v) => patchMatch(f, { vestingPct: v })} aria-label={`Filer ${f + 1} vesting`} />} />
+          {(() => {
+            // M9 (SPEC §10.2): after-tax 401k → Roth, capped by live 415(c) room
+            const eligible = a.afterTaxContributions && (a.inPlanConversion || a.inServiceWithdrawal);
+            const ageF1 = a.filers[f].currentAge + 1;
+            const at = (rows: typeof pf.salary) =>
+              resolveSchedule(rows, { startAge: ageF1, endAge: ageF1, indexed: false, inflation: 0 })[0] ?? 0;
+            const capped = capFiler401k(at(pf.contrib401k), ageF1, at(pf.salary), pf.split401kRothPct, a.limits);
+            const base = capped.trad + capped.roth - capped.catchUpUsed;
+            const matchNow = clamp415c(base, matchAmount(pf.match, capped.trad + capped.roth, at(pf.salary), pf.match.flatAmount), 0, a.limits);
+            const room = megaBackdoorRoom(base, matchNow, a.limits);
+            const rows = pf.megaBackdoor ?? [];
+            const patchMega = (next: MegaBackdoorRow[]) => patchPf(f, { megaBackdoor: next });
+            return (
+              <div className="py-2" data-testid={`mega-editor-${f}`}>
+                <span className="text-[13px] font-medium text-neutral-800 dark:text-neutral-200">
+                  Mega-backdoor (after-tax 401k → Roth)
+                </span>
+                {!eligible ? (
+                  <p className="mt-0.5 rounded-sm bg-amber-50 px-1.5 py-1 text-xs leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                    plan toggles don't permit it — enable “After-tax contributions” plus a
+                    conversion route (in-plan conversion or in-service withdrawal) under
+                    Reference &amp; plan rules → Plan toggles
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs text-neutral-500">
+                      415(c) room this year: {fmtMoney0(room)} after your deferrals and match —
+                      lands as immediately-accessible Roth IRA tranches
+                    </p>
+                    {rows.map((row, i) => (
+                      <div key={i} className="mt-1.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-800">
+                        <div className="flex items-center gap-1.5">
+                          <Select
+                            value={row.max ? 'max' : 'amount'}
+                            onValueChange={(v) =>
+                              patchMega(rows.map((x, j) => (j === i ? (v === 'max' ? { fromAge: x.fromAge, toAge: x.toAge, max: true } : { fromAge: x.fromAge, toAge: x.toAge, amount: 20_000 }) : x)))
+                            }
+                          >
+                            <SelectTrigger size="sm" className="w-40 bg-white text-xs dark:bg-neutral-900" aria-label={`Filer ${f + 1} mega ${i + 1} type`}>
+                              <SelectValue>{row.max ? 'Max 415(c) room' : 'Fixed $ / yr'}</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="amount">Fixed $ / yr (today's $)</SelectItem>
+                              <SelectItem value="max">Max 415(c) room — tracks the room each year</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {row.max ? (
+                            <span className="min-w-0 flex-1 text-xs text-neutral-500 tnum">≈ {fmtMoney0(room)} this year</span>
+                          ) : (
+                            <MoneyInput className="min-w-0 flex-1" value={row.amount ?? 0} min={0} onCommit={(v) => patchMega(rows.map((x, j) => (j === i ? { ...x, amount: v } : x)))} aria-label={`Filer ${f + 1} mega ${i + 1} amount`} />
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 px-1.5 text-neutral-400 hover:text-red-500" aria-label={`Filer ${f + 1} delete mega ${i + 1}`} onClick={() => patchMega(rows.filter((_, j) => j !== i))}>×</Button>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-xs text-neutral-400">
+                          from
+                          <AgeInput className="w-16" value={row.fromAge} onCommit={(v) => patchMega(rows.map((x, j) => (j === i ? { ...x, fromAge: v } : x)))} aria-label={`Filer ${f + 1} mega ${i + 1} from age`} />
+                          to
+                          <DraftNumberInput className="w-16" value={row.toAge ?? 0} format={(v) => (v === 0 ? '' : String(v))} parse={(raw) => { const t2 = raw.trim(); if (t2 === '') return 0; const n2 = Number(t2); return Number.isInteger(n2) && n2 > 0 ? n2 : null; }} onCommit={(v) => patchMega(rows.map((x, j) => (j === i ? { ...x, toAge: v === 0 ? null : v } : x)))} placeholder="∞" invalidMessage="whole age" aria-label={`Filer ${f + 1} mega ${i + 1} to age`} />
+                        </div>
+                        {!row.max && (row.amount ?? 0) > room + 1e-9 && (
+                          <p className="mt-1 rounded bg-amber-50 px-2 py-1 text-[11px] leading-4 text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                            exceeds 415(c) room {fmtMoney0(room)} — capped
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                    <div className="mt-1.5 flex gap-1.5">
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => patchMega([...rows, { fromAge: ageF1, toAge: null, amount: 20_000 }])}>
+                        + fixed row
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => patchMega([...rows, { fromAge: ageF1, toAge: null, max: true }])}>
+                        + max row
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
           <FieldRow
             label="Separation age override"
             description="blank = auto: last age with salary"
@@ -658,9 +740,9 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       <Group title="Plan toggles & access overrides">
         {(
           [
-            ['inPlanConversion', 'In-plan conversion allowed (P2)'],
-            ['inServiceWithdrawal', 'In-service withdrawal allowed (P2)'],
-            ['afterTaxContributions', 'After-tax contributions allowed (P2)'],
+            ['inPlanConversion', 'In-plan conversion allowed'],
+            ['inServiceWithdrawal', 'In-service withdrawal allowed'],
+            ['afterTaxContributions', 'After-tax contributions allowed'],
           ] as Array<[keyof Pick<Assumptions, 'inPlanConversion' | 'inServiceWithdrawal' | 'afterTaxContributions'>, string]>
         ).map(([key, lbl]) => (
           <label key={key} className="mt-1.5 flex items-center justify-between text-xs text-neutral-600 dark:text-neutral-400">

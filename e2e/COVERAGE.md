@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec, `MG` = mega.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -66,7 +66,7 @@ server can never be silently reused.
 | growthScenarios[].perFiler[].backdoor | PS:maximal (true) |
 | growthScenarios[].perFiler[].match.{mode,rate,capPctOfSalary,flatAmount,destination,vestingPct} | PS:maximal (flat + roth401k + 80% on filer 1; percent + trad401k + 100% on filer 2) |
 | growthScenarios[].hsaContrib / taxableContrib / cashContrib | PS:maximal · SE:simple-mode class |
-| growthScenarios[].megaBackdoor (P2, optional) | PS:maximal (absent — absence round-trips) |
+| growthScenarios[].perFiler[].megaBackdoor (M9 — moved per-filer, both row shapes) | PS:maximal · MG:editor (fixed + max rows → state) |
 | growthScenarios[].windfalls (incl. filer owner) | PS:maximal (rothIra target, filer 1) |
 | growthScenarios[].returnScheduleOverride | PS:maximal |
 | strategies[].id/name/drawdownStartAge/spending/oneTimeExpenses/income/order | PS:maximal (all non-default incl. reordered order + SS row) |
@@ -98,7 +98,7 @@ output §5, schedule semantics §4) are engine rules covered by the 158-test uni
 semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output → EQ + DD (run-path
 table/tooltip/bridge equality).
 
-## 3. UI controls — 80/80
+## 3. UI controls — 82/82
 
 | Control | Test |
 |---|---|
@@ -139,6 +139,8 @@ table/tooltip/bridge equality).
 | Advanced: detailed balances (incl. conversions editor) | PS:maximal · LT:advanced-tier |
 | Advanced: include-account switches | PS:maximal · LT:advanced-tier |
 | Advanced: contribution detail (splits, deductible, backdoor, match config, separation) | PS:maximal · LT:separation-warning |
+| Mega-backdoor editor (M9): live 415(c) room hint, fixed/max row types, over-room warning, disabled-with-reason | MG (all three tests) + unit room-arithmetic tests |
+| Plan toggles now LIVE (labels de-P2'd) gating the mega editor | MG:disabled |
 | Advanced: windfall editor (age/amount/target/filer/label/delete/add + today's-$ readout) | PS:maximal · LT:advanced-tier |
 | Advanced: cash return / fees / dividend fields | PS:maximal |
 | Advanced: scenario return override add/remove | PS:maximal |
@@ -234,4 +236,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 291/291 items covered (73 state fields + 71 VARIABLES rows + 92 Growth + 30 Drawdown + 24 Compare + 1 route-removal check). M8 pre-work: +2; M8 re-audit: +5 Drawdown items (ladder editor, withheld warning, conversion rate column, bridge source stack, conversion marker), +1 Compare item (ladder preset + honest note); strategies[].ladder flips from absence-pinned to populated round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**
+**Manifest: 294/294 items covered (73 state fields + 72 VARIABLES rows + 94 Growth + 30 Drawdown + 24 Compare + 1 route-removal check). M8 re-audit noted previously; M9 re-audit: +1 VARIABLES row (mega rows), +2 Growth-panel items (mega editor, live plan toggles); megaBackdoor flips from absence-pinned to populated per-filer round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

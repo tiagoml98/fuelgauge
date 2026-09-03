@@ -49,6 +49,14 @@ export interface Windfall {
   filer?: number;
 }
 
+/** M9: fixed $/yr (today's $, indexed) or max — that year's live 415(c) room. */
+export interface MegaBackdoorRow {
+  fromAge: number;
+  toAge: number | null;
+  amount?: number;
+  max?: boolean;
+}
+
 export type IncomeKind = 'partTime' | 'pension' | 'socialSecurity';
 
 /**
@@ -251,6 +259,14 @@ export interface FilerGrowthInputs {
   tradIraDeductible?: boolean;
   /** Routes the IRA contribution to Roth as a conversion with taxablePortion 0 (gate #4). */
   backdoor: boolean;
+  /**
+   * M9 (SPEC §10.2): after-tax 401k → Roth, capped by the live 415(c) room
+   * (deferrals + match first, catch-ups outside). Rows are additive; fixed
+   * rows are today's $ indexed like contributions; max rows resolve EACH YEAR
+   * to that year's remaining room. Lands as {year, amount, taxablePortion: 0}
+   * Roth IRA tranches — accessible immediately.
+   */
+  megaBackdoor?: MegaBackdoorRow[];
   /** M1 #5: match config lives with its filer — one object, no parallel arrays. */
   match: EmployerMatch;
 }
@@ -285,8 +301,6 @@ export interface GrowthScenario {
   hsaContrib: ScheduleRow[];
   taxableContrib: ScheduleRow[];
   cashContrib: ScheduleRow[];
-  /** P2 (M9); capped by 415(c). */
-  megaBackdoor?: ScheduleRow[];
   windfalls: Windfall[];
   /** Enables "base / bear / stress" scenarios; unset = Assumptions schedule. */
   returnScheduleOverride?: ScheduleRow[];
@@ -447,6 +461,8 @@ export interface RunYear {
   effectiveOrdinaryRate?: number;
   /** M8: this year's conversion-ladder activity (absent when none). */
   ladder?: LadderYear;
+  /** M9: total mega-backdoor dollars landed this year (absent when none). */
+  megaBackdoor?: number;
   /**
    * M8: NET amounts by withdrawal SOURCE (rothBasis vs seasonedConversions vs
    * rothEarnings are distinct here though they share the rothIra account).

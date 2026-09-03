@@ -124,3 +124,12 @@ export function clamp415c(
 ): number {
   return Math.min(match, Math.max(0, limits.overall415c - baseDeferral - afterTax));
 }
+
+/**
+ * M9 (SPEC §10.2): the 415(c) room left for after-tax (mega-backdoor)
+ * contributions — overall limit minus base deferrals (catch-ups sit outside
+ * 415(c)) minus the employer match credited this year.
+ */
+export function megaBackdoorRoom(baseDeferral: number, match: number, limits: LimitSet): number {
+  return Math.max(0, limits.overall415c - baseDeferral - match);
+}

@@ -120,9 +120,9 @@ Fix take-home cost C. Path A: min(limit, C ÷ (1 − t_now)) pre-tax, remainder 
 **What it is.** After-tax (non-Roth) 401k contributions, converted to Roth immediately — in-plan to the Roth 401k, or rolled out to the Roth IRA. Only the room left under the 415(c) total limit is available.
 
 **Inputs**
-- Per filer, in the growth scenario: `megaBackdoor: ScheduleRow[]` — $/yr, today's dollars, indexed like other contributions, end-of-year timing.
+- Per filer, in the growth scenario: `megaBackdoor: MegaBackdoorRow[]` — rows are additive and either **fixed $/yr** (today's dollars, indexed like other contributions, end-of-year timing) or **max** — resolving each year to that year's live 415(c) room, tracking salary/deferral/limit changes without silent capping. (As built: the field is per-filer on `FilerGrowthInputs`; the old scenario-level placeholder was removed.)
 - Plan toggles (Assumptions, existing): `afterTaxContributions` (required), and at least one of `inPlanConversion` or `inServiceWithdrawal` (the conversion route). If the required toggles are off, the schedule is dropped with a run note: "plan does not permit after-tax contributions / conversion — mega-backdoor rows ignored."
-- Quick action on the row: "max it" — writes the row to the live 415(c) room for that year (see cap).
+- "Max" is a row TYPE, not a snapshot (approval refinement): the editor offers "+ fixed row" and "+ max row".
 
 **Cap**
 - Room = 415(c) limit − that filer's employee deferrals (traditional + Roth, **excluding** age-based catch-ups, which sit outside 415(c)) − employer match credited that year. Indexed with the limits. Capped and warned inline ("exceeds 415(c) room $X — capped"), same pattern as deferral caps.

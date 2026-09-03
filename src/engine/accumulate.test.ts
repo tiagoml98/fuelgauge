@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { accessibleConversionAmount } from './access';
 import { separationAge, simulateAccumulation } from './accumulate';
 import { defaultAssumptions, defaultFilerBalances, defaultGrowthScenario } from './defaults';
 import { toReal } from './schedule';
@@ -513,5 +514,97 @@ describe('ATE, indexing, excluded accounts', () => {
       x.perFiler[0].contrib401k = flat(1_000, 31);
     });
     expect(simulateAccumulation(a, g)).toEqual(simulateAccumulation(a, g));
+  });
+});
+
+describe('mega-backdoor Roth (M9, SPEC §10.2)', () => {
+  const megaA = (mut?: (a: Assumptions) => void) =>
+    makeA((x) => {
+      x.returnSchedule = flat(0);
+      x.afterTaxContributions = true;
+      x.inPlanConversion = true;
+      mut?.(x);
+    });
+  const megaG = (rows: NonNullable<GrowthScenario['perFiler'][number]['megaBackdoor']>, mut?: (g: GrowthScenario) => void) =>
+    makeG((x) => {
+      x.perFiler[0].salary = flat(100_000, 31);
+      x.perFiler[0].contrib401k = flat(24_500, 31);
+      x.perFiler[0].match = { ...x.perFiler[0].match, mode: 'percent', rate: 0.5, capPctOfSalary: 0.06 };
+      x.perFiler[0].megaBackdoor = rows;
+      mut?.(x);
+    });
+
+  it('room to the cent: 72,000 − 24,500 − 3,000 = 44,500; requested 60,000 capped with the note', () => {
+    const years = simulateAccumulation(megaA(), megaG([{ fromAge: 31, toAge: null, amount: 60_000 }]));
+    const y31 = rowAt(years, 31);
+    expect(y31.megaBackdoor).toBeCloseTo(44_500, 6);
+    expect(y31.accounts.rothIra.rothConversions).toContainEqual({ year: 2027, amount: 44_500, taxablePortion: 0 });
+    expect(y31.events.some((e) => e.label === 'mega-backdoor (filer 1) requested 60,000, capped at 44,500')).toBe(true);
+  });
+
+  it('max row follows the room each year: match change moves it, the 50+ catch-up does NOT', () => {
+    const g = megaG([{ fromAge: 31, toAge: null, max: true }], (x) => {
+      // salary rises at 40 → match 3,000 → 3,600; deferral rises at 50 by the
+      // catch-up only (24,500 → 32,500) — catch-ups sit OUTSIDE 415(c)
+      x.perFiler[0].salary = [
+        { fromAge: 31, toAge: 39, value: 100_000 },
+        { fromAge: 40, toAge: null, value: 120_000 },
+      ];
+      x.perFiler[0].contrib401k = [
+        { fromAge: 31, toAge: 49, value: 24_500 },
+        { fromAge: 50, toAge: null, value: 32_500 },
+      ];
+    });
+    const a = megaA((x) => {
+      x.horizonAge = 55;
+    });
+    const years = simulateAccumulation(a, g);
+    expect(rowAt(years, 39).megaBackdoor).toBeCloseTo(72_000 - 24_500 - 3_000, 6); // 44,500
+    expect(rowAt(years, 40).megaBackdoor).toBeCloseTo(72_000 - 24_500 - 3_600, 6); // 43,900
+    expect(rowAt(years, 50).megaBackdoor).toBeCloseTo(72_000 - 24_500 - 3_600, 6); // catch-up excluded
+  });
+
+  it('toggles gate it: afterTax off → dropped with note, run identical to no rows; no conversion route → dropped', () => {
+    const rows = [{ fromAge: 31, toAge: null, amount: 10_000 }];
+    const off = megaA((x) => {
+      x.afterTaxContributions = false;
+    });
+    const withRows = simulateAccumulation(off, megaG(rows));
+    const without = simulateAccumulation(off, megaG([]));
+    expect(rowAt(withRows, 31).megaBackdoor).toBeUndefined();
+    expect(rowAt(withRows, 31).accounts.rothIra.balance).toBe(rowAt(without, 31).accounts.rothIra.balance);
+    expect(
+      eventsOf(withRows).some((e) => e.label.includes('plan does not permit after-tax contributions')),
+    ).toBe(true);
+
+    const noRoute = megaA((x) => {
+      x.inPlanConversion = false;
+      x.inServiceWithdrawal = false;
+    });
+    const dropped = simulateAccumulation(noRoute, megaG(rows));
+    expect(rowAt(dropped, 31).megaBackdoor).toBeUndefined();
+  });
+
+  it('tranche shape + immediate access + firstFundedYear; fixed rows index like contributions', () => {
+    const a = megaA((x) => {
+      x.indexWithInflation = true;
+      x.inflation = 0.03;
+    });
+    const years = simulateAccumulation(a, megaG([{ fromAge: 31, toAge: null, amount: 10_000 }]));
+    const y32 = rowAt(years, 32);
+    const tranche = y32.accounts.rothIra.rothConversions!.find((c) => c.year === 2028)!;
+    expect(tranche.taxablePortion).toBe(0);
+    expect(tranche.amount).toBeCloseTo(10_000 * 1.03 ** 2, 4); // end-of-year exponent, like contributions
+    // taxablePortion 0 ⇒ accessible immediately at ANY age (M8 unlock rule)
+    expect(accessibleConversionAmount(tranche, 2028, 32)).toBeCloseTo(tranche.amount, 6);
+    // firstFundedYear anchored by the first mega year (Roth IRA previously empty)
+    expect(rowAt(years, 31).accounts.rothIra.rothConversions!.length).toBeGreaterThan(0);
+  });
+
+  it('identity: absent ≡ empty rows — byte-identical', () => {
+    const g1 = megaG([]);
+    const g2 = megaG([]);
+    delete g2.perFiler[0].megaBackdoor;
+    expect(simulateAccumulation(megaA(), g1)).toEqual(simulateAccumulation(megaA(), g2));
   });
 });

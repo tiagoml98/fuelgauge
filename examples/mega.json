@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "assumptions": {
+    "filers": [
+      {
+        "currentAge": 30
+      }
+    ],
+    "filingStatus": "single",
+    "stateTaxRate": 0,
+    "currentYear": 2026,
+    "balances": {
+      "perFiler": [
+        {
+          "trad401k": 0,
+          "tradIra": 0,
+          "tradIraBasis": 0,
+          "roth401k": 0,
+          "roth401kBasis": 0,
+          "rothIra": {
+            "basis": 0,
+            "conversions": [],
+            "earnings": 0,
+            "firstFundedYear": null
+          },
+          "hsa": 0
+        }
+      ],
+      "taxable": 0,
+      "taxableBasis": 0,
+      "cash": 0
+    },
+    "include": {
+      "trad401k": true,
+      "tradIra": true,
+      "roth401k": true,
+      "rothIra": true,
+      "hsa": true,
+      "taxable": true,
+      "cash": true
+    },
+    "inflation": 0.03,
+    "indexWithInflation": false,
+    "returnSchedule": [
+      {
+        "fromAge": 0,
+        "toAge": null,
+        "value": 0
+      }
+    ],
+    "returnOverrides": {
+      "cash": [
+        {
+          "fromAge": 0,
+          "toAge": null,
+          "value": 0
+        }
+      ]
+    },
+    "fees": 0,
+    "dividendYield": 0,
+    "dividendTaxRate": 0.15,
+    "taxMode": "simple",
+    "marginalRateNow": 0.24,
+    "effectiveRetirementRate": 0.12,
+    "ltcgRate": 0.15,
+    "limits": {
+      "deferral401k": 24500,
+      "catchUp401k50": 8000,
+      "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000,
+      "ira": 7500,
+      "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400,
+      "hsaFamily": 8750,
+      "hsaCatchUp55": 1000,
+      "overall415c": 72000
+    },
+    "hsaCoverage": "selfOnly",
+    "horizonAge": 60,
+    "hsaTreatment": "medical",
+    "safeWithdrawalRate": 0.04,
+    "fireSpendingTarget": 0,
+    "coastTargetAge": 65,
+    "inPlanConversion": true,
+    "inServiceWithdrawal": false,
+    "afterTaxContributions": true
+  },
+  "growthScenarios": [
+    {
+      "id": "base",
+      "name": "Mega hand-check: 100k salary, 24.5k deferral, 3k match \u2192 room 44,500/yr",
+      "perFiler": [
+        {
+          "salary": [
+            {
+              "fromAge": 31,
+              "toAge": null,
+              "value": 100000
+            }
+          ],
+          "contrib401k": [
+            {
+              "fromAge": 31,
+              "toAge": null,
+              "value": 24500
+            }
+          ],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "megaBackdoor": [
+            {
+              "fromAge": 31,
+              "toAge": null,
+              "amount": 60000
+            }
+          ],
+          "match": {
+            "mode": "percent",
+            "rate": 0.5,
+            "capPctOfSalary": 0.06,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [],
+      "cashContrib": [],
+      "windfalls": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "base",
+      "name": "Retire at 45 on $40k \u2014 funded by immediately-accessible mega tranches",
+      "drawdownStartAge": 45,
+      "spending": [
+        {
+          "fromAge": 0,
+          "toAge": null,
+          "value": 40000
+        }
+      ],
+      "oneTimeExpenses": [],
+      "income": [],
+      "order": [
+        "cash",
+        "taxable",
+        "preTax",
+        "rothBasis",
+        "seasonedConversions",
+        "rothEarnings"
+      ]
+    }
+  ],
+  "display": {
+    "real": false,
+    "ate": true,
+    "byBuckets": true,
+    "theme": "light",
+    "yearlyTable": true,
+    "activeTab": "drawdown"
+  }
+}

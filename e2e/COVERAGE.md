@@ -98,7 +98,7 @@ output §5, schedule semantics §4) are engine rules covered by the 158-test uni
 semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output → EQ + DD (run-path
 table/tooltip/bridge equality).
 
-## 3. UI controls — 78/78
+## 3. UI controls — 80/80
 
 | Control | Test |
 |---|---|
@@ -145,7 +145,9 @@ table/tooltip/bridge equality).
 | Advanced: tax fields | PS:maximal |
 | Tax mode select — LIVE (M7): bracket hides the effective-rate input + its sensitivity row | BR:mode-toggle |
 | Bracket editor (M7): standard deduction, per-bracket rate/upTo rows (blank = top), + bracket, delete, reset to current federal, LTCG flat note | BR:mode-toggle (edit → state, reset, 16,100 default rendered) |
-| Rate-arbitrage computed line (M7 bracket): "this year (D): X% — computed from your brackets" | BR:hand-check (8.5% = engine value) |
+| Rate-arbitrage computed line (M7 bracket, M8 pre-work): first pre-tax-withdrawal year's rate + "average over drawdown"; plain message when no year draws pre-tax | BR:hand-check (8.5% + average) · BR:no-pre-tax (— + 0.5% average) |
+| Never-retires warning (M8 pre-work): Drawdown notice + Compare cell text when the auto start hits the horizon | BR:never-retires (both tabs; funding tile absent) |
+| Equal-take-home guard (M8 pre-work): "Nothing to split" without a 401k schedule, no spawn | CP:equal-take-home (guard + spawn-with-schedule) |
 | Crosshair effective-rate line (M7 bracket) | BR:hand-check (rendered at 65) |
 | Advanced: 10 limit fields | PS:maximal · SE:limit-warning |
 | Advanced: horizon/SWR/coast/barista/HSA treatment/coverage | PS:maximal |
@@ -226,4 +228,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 283/283 items covered (73 state fields + 71 VARIABLES rows + 90 Growth + 25 Drawdown + 23 Compare + 1 route-removal check). M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**
+**Manifest: 285/285 items covered (73 state fields + 71 VARIABLES rows + 92 Growth + 25 Drawdown + 23 Compare + 1 route-removal check). M8 pre-work: +2 items (rate-panel first-pre-tax/average + never-retires; the preset guard folds into the existing equal-take-home row). M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

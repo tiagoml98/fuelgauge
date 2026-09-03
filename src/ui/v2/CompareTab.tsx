@@ -141,6 +141,11 @@ export function CompareTab() {
     dispatch({ type: 'addCompareRuns', scenarios, strategies });
   };
   const equalTakeHome = () => {
+    // M8 pre-work: with no 401k schedule the two paths are identical — say so
+    if (!scenario.perFiler.some((pf) => pf.contrib401k.some((r) => r.value > 0))) {
+      setPresetNote('Nothing to split — this scenario has no 401k contributions. Add a 401k schedule first; the preset compares pre-tax vs Roth destinations for those dollars.');
+      return;
+    }
     const { traditional, roth, drivers } = equalTakeHomePair(scenario, a);
     let note: string;
     if (a.taxMode === 'bracket') {
@@ -427,7 +432,9 @@ export function CompareTab() {
                       {selected >= 0 && <span className="mr-1 inline-block h-2 w-2 rounded-sm" style={{ background: RUN_COLORS[d.theme][selected % 8] }} />}
                       <span className="line-clamp-1 inline">{label}</span>
                     </td>
-                    {tiles && cell.run ? (
+                    {cell.run && cell.run.drawdownStartAge >= a.horizonAge ? (
+                      <td colSpan={7} className="p-1 text-neutral-400">never retires — auto start hits the horizon</td>
+                    ) : tiles && cell.run ? (
                       <>
                         {metricRows(tiles, cell).map(([k, v]) => (
                           <td key={k} className="p-1">{v}</td>
@@ -505,6 +512,8 @@ export function CompareTab() {
                             )}
                             {!strategyHasSpending(w) ? (
                               <span className="text-neutral-400">no spending entered</span>
+                            ) : cell.run && cell.run.drawdownStartAge >= a.horizonAge ? (
+                              <span className="text-neutral-400">never retires — auto start hits the horizon</span>
                             ) : tiles && cell.run ? (
                               <>
                                 {/* M6.1 #4: compact 2-column label:value pairs */}

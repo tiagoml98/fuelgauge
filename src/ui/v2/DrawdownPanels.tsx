@@ -15,25 +15,37 @@ const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 
 export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult | null }) {
   const now = a.marginalRateNow;
-  // M7: in bracket mode the effective rate is an OUTPUT — the first drawdown
-  // year with ordinary income shows its computed rate
-  const bracketYear = a.taxMode === 'bracket'
-    ? run?.years.find((y) => y.age >= run.drawdownStartAge && y.effectiveOrdinaryRate !== undefined)
-    : undefined;
-  const later = bracketYear?.effectiveOrdinaryRate ?? a.effectiveRetirementRate + a.stateTaxRate;
+  // M7 (+ M8 pre-work): in bracket mode the effective rate is an OUTPUT.
+  // Early-retirement runs often draw no pre-tax for years — key on the FIRST
+  // YEAR WITH PRE-TAX WITHDRAWALS and show the drawdown-wide average too.
+  const bracket = a.taxMode === 'bracket';
+  const drawYears = bracket && run ? run.years.filter((y) => y.age >= run.drawdownStartAge) : [];
+  const firstPreTax = drawYears.find(
+    (y) =>
+      (y.withdrawals?.trad401k ?? 0) + (y.withdrawals?.tradIra ?? 0) > 0.005 &&
+      y.effectiveOrdinaryRate !== undefined,
+  );
+  const totalOrdinary = drawYears.reduce((s, y) => s + (y.ordinaryIncome ?? 0), 0);
+  const avg =
+    totalOrdinary > 0.005
+      ? drawYears.reduce((s, y) => s + (y.ordinaryTax ?? 0), 0) / totalOrdinary
+      : null;
+  const later = bracket
+    ? (firstPreTax?.effectiveOrdinaryRate ?? avg ?? 0)
+    : a.effectiveRetirementRate + a.stateTaxRate;
   const deltaCents = Math.round(Math.abs(now - later) * 100);
-  const laterLabel =
-    a.taxMode === 'bracket'
-      ? bracketYear
-        ? `this year (${bracketYear.age}): ${pct(later)} — computed from your brackets`
-        : 'no ordinary income yet — computed from your brackets'
-      : 'effective after access';
-  const verdict =
-    now > later
+  const laterLabel = bracket
+    ? firstPreTax
+      ? `first pre-tax withdrawals (age ${firstPreTax.age}) — computed from your brackets`
+      : 'no year draws pre-tax in this run'
+    : 'effective after access';
+  const verdict = !bracket || firstPreTax || avg !== null
+    ? now > later
       ? `Deferring at ${pct(now)} and withdrawing at ${pct(later)} keeps ${deltaCents}¢ of every pre-tax dollar — on rates alone, traditional wins.`
       : now < later
         ? `You'd defer at ${pct(now)} but withdraw at ${pct(later)} — on rates alone, Roth wins.`
-        : 'Rates match — traditional vs Roth is a wash on rates alone; limits and drag decide.';
+        : 'Rates match — traditional vs Roth is a wash on rates alone; limits and drag decide.'
+    : 'This run pays no ordinary income tax in drawdown — there is nothing to arbitrage against.';
 
   return (
     <Card
@@ -51,10 +63,17 @@ export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult 
           <div className="text-[11px] text-neutral-500">conversion years (Phase 2 ladder)</div>
         </div>
         <div>
-          <div className="tnum text-xl font-semibold" data-testid="rate-later">{bracketYear || a.taxMode === 'simple' ? pct(later) : '—'}</div>
+          <div className="tnum text-xl font-semibold" data-testid="rate-later">
+            {!bracket || firstPreTax ? pct(later) : '—'}
+          </div>
           <div className="text-[11px] text-neutral-500">{laterLabel}</div>
         </div>
       </div>
+      {bracket && avg !== null && (
+        <p className="text-xs text-neutral-500" data-testid="rate-average">
+          average over drawdown: {pct(avg)}
+        </p>
+      )}
       <p className="text-xs leading-5 text-neutral-600 dark:text-neutral-400">{verdict}</p>
     </Card>
   );

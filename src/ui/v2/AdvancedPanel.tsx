@@ -558,7 +558,7 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
       <Group title="Taxes">
         <FieldRow
           label="Tax mode"
-          description={a.taxMode === 'bracket' ? 'brackets compute each year’s actual tax — the effective rate becomes an output' : 'flat rates everywhere'}
+          description={a.taxMode === 'bracket' ? 'brackets compute each year’s actual tax — the effective rate becomes an output; the computed rate appears in the Drawdown tab’s rate panel and the chart readout' : 'flat rates everywhere'}
           control={
             <Select value={a.taxMode} onValueChange={(v) => patchA({ taxMode: v as Assumptions['taxMode'] })}>
               <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900" aria-label="Tax mode">

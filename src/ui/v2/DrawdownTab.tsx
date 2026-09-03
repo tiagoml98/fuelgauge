@@ -104,7 +104,19 @@ export function DrawdownTab() {
             </Card>
           )}
 
-          {run && hasSpending && (
+          {run && hasSpending && run.drawdownStartAge >= a.horizonAge && (
+            <Card className="gap-1 p-6" data-testid="never-retires">
+              <span className="text-lg font-semibold text-neutral-400">this run never retires</span>
+              <p className="text-sm text-neutral-500">
+                Salary or contributions continue to the horizon, so the auto drawdown start
+                resolves to {run.drawdownStartAge} — the horizon itself. Set an explicit drawdown
+                start age in the strategy, or end the salary/contribution schedules in the
+                scenario. Results below would describe a retirement that never begins.
+              </p>
+            </Card>
+          )}
+
+          {run && hasSpending && run.drawdownStartAge < a.horizonAge && (
             <>
               <div className="grid grid-cols-2 gap-3 xl:grid-cols-5">
                 <Tile

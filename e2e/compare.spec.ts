@@ -112,7 +112,18 @@ test('retire-at pair: no fake crossover — curves diverge and never cross', asy
 });
 
 test('equal-take-home preset spawns both paths with the §8 explanation', async ({ page }) => {
+  // M8 pre-work: with NO 401k schedule the paths would be identical — the
+  // preset must refuse with a plain note instead of spawning twins
   await loadState(page, compareState());
+  await page.getByRole('button', { name: 'Traditional vs Roth (equal take-home)' }).click();
+  await expect(page.getByTestId('preset-note')).toContainText('Nothing to split');
+  expect((await readState(page)).growthScenarios).toHaveLength(1); // nothing spawned
+
+  // with a 401k schedule the pair spawns as before
+  const withContrib = compareState();
+  withContrib.growthScenarios[0].perFiler[0].salary = [{ fromAge: 44, toAge: 44, value: 120_000 }];
+  withContrib.growthScenarios[0].perFiler[0].contrib401k = [{ fromAge: 44, toAge: 44, value: 10_000 }];
+  await loadState(page, withContrib);
   await page.getByRole('button', { name: 'Traditional vs Roth (equal take-home)' }).click();
   const s = await readState(page);
   const trad = s.growthScenarios.find((g) => g.name === 'Traditional 401k (equal take-home)')!;
@@ -121,7 +132,6 @@ test('equal-take-home preset spawns both paths with the §8 explanation', async 
   expect(roth.perFiler[0].split401kRothPct).toBe(1);
   expect(validateRows(trad.perFiler[0].contrib401k)).toEqual([]);
   expect(validateRows(roth.taxableContrib)).toEqual([]);
-  // drawdown.json has no contributions → no crossover story, but the note still explains the driver
   await expect(page.getByTestId('preset-note')).toContainText('rate');
   // M6.1 #3d: spawned scenarios group under the experiments divider with keep buttons
   expect(trad.experiment).toBe(true);

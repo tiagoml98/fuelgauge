@@ -12,7 +12,6 @@
 
 import ReactECharts from 'echarts-for-react';
 import { useEffect, useMemo, useRef } from 'react';
-import { ateByAccount } from '../../engine/ate';
 import { toReal } from '../../engine/schedule';
 import type { Assumptions, DisplayState, MarkerEventKind, RunYear } from '../../engine/types';
 import { joinMarkerLabels, shortMarkerLabel } from '../v2/markers';
@@ -110,7 +109,7 @@ export function GrowthChart({
           color: ACCOUNT_COLORS[mode][id],
           values: years.map((y) => [
             y.age,
-            lens(display.ate ? ateByAccount(y.accounts, a)[id] : y.accounts[id].balance, y.age),
+            lens(display.ate ? y.ate[id] : y.accounts[id].balance, y.age),
           ]),
         }));
 
@@ -254,7 +253,7 @@ export function GrowthChart({
           const age = params[0]?.data?.[0];
           const y = years.find((yy) => yy.age === age);
           if (!y) return '';
-          const ate = ateByAccount(y.accounts, a);
+          const ate = y.ate; // M7: engine valuation (bracket rate included)
           const rows = ACCOUNT_ORDER.filter((id) => y.accounts[id].balance > 0.005)
             .map((id) => {
               const v = lens(display.ate ? ate[id] : y.accounts[id].balance, y.age);
@@ -281,6 +280,11 @@ export function GrowthChart({
                    <span>withdrawn (gross)</span><span class="tnum">${fmtMoney(
                      lens(Object.values(y.withdrawals ?? {}).reduce((s, v) => s + (v ?? 0), 0), y.age),
                    )}</span></div>` +
+                // M7 bracket mode: the year's COMPUTED effective rate
+                (y.effectiveOrdinaryRate !== undefined
+                  ? `<div style="display:flex;justify-content:space-between;gap:16px;color:${chrome.inkSecondary}">
+                       <span>effective rate</span><span class="tnum">${(y.effectiveOrdinaryRate * 100).toFixed(1)}%</span></div>`
+                  : '') +
                 (y.gap
                   ? `<div style="color:#d03b3b;font-weight:600;margin-top:2px">⚠ GAP — need unmet by ${fmtMoney(lens(y.unmet ?? 0, y.age))}</div>`
                   : '')

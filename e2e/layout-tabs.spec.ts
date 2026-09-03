@@ -103,7 +103,7 @@ test('Advanced tier shows every group and persists the tier choice', async ({ pa
     'Contribution detail',
     'Windfalls',
     'Returns & fees',
-    'Taxes (simple mode)',
+    'Taxes',
     'Contribution limits (2026, indexed)',
     'Horizon, HSA & targets',
     'Plan toggles & access overrides',
@@ -155,7 +155,7 @@ test('Advanced sections: eyebrow hierarchy + inline sensitivity rows machine-che
     const r = (1 - (a.effectiveRetirementRate + delta + a.stateTaxRate)) / (1 - a.marginalRateNow) - 1;
     return `${r >= 0 ? '+' : '−'}${Math.abs(Math.round(r * 1000) / 10)}%`;
   };
-  await page.getByText('Taxes (simple mode)').click();
+  await page.getByText('Taxes', { exact: true }).click();
   await expect(page.getByTestId('sensitivity-rate')).toHaveText(
     `Traditional vs Roth if this rate is…−5 pts → ${edge(-0.05)}·now → ${edge(0)}·+5 pts → ${edge(0.05)}`,
   );

@@ -11,11 +11,13 @@ import type {
   AccountId,
   Assumptions,
   Bucket,
+  BracketTable,
   DisplayState,
   EmployerMatch,
   Filer,
   FilerBalances,
   FilerGrowthInputs,
+  FilingStatus,
   GrowthScenario,
   LimitSet,
   PersistedState,
@@ -55,6 +57,40 @@ export const DEFAULT_MARGINAL_RATE_NOW = 0.24;
 export const DEFAULT_EFFECTIVE_RETIREMENT_RATE = 0.12;
 export const DEFAULT_LTCG_RATE = 0.15;
 export const DEFAULT_STATE_TAX_RATE = 0;
+
+/**
+ * M7: 2026 federal bracket tables (Rev. Proc. 2025-32), same anchor year as
+ * LIMITS_2026. Editable per filing status; brackets apply to TAXABLE income
+ * (after the standard deduction); upTo null = top bracket. Deliberately NOT
+ * placed in defaultAssumptions — resolveBracketTable falls back here, so the
+ * tables persist only once edited.
+ */
+export const DEFAULT_BRACKET_TABLES: Record<FilingStatus, BracketTable> = {
+  single: {
+    standardDeduction: 16_100,
+    brackets: [
+      { upTo: 12_400, rate: 0.1 },
+      { upTo: 50_400, rate: 0.12 },
+      { upTo: 105_700, rate: 0.22 },
+      { upTo: 201_775, rate: 0.24 },
+      { upTo: 256_225, rate: 0.32 },
+      { upTo: 640_600, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+  },
+  marriedJoint: {
+    standardDeduction: 32_200,
+    brackets: [
+      { upTo: 24_800, rate: 0.1 },
+      { upTo: 100_800, rate: 0.12 },
+      { upTo: 211_400, rate: 0.22 },
+      { upTo: 403_550, rate: 0.24 },
+      { upTo: 512_450, rate: 0.32 },
+      { upTo: 768_700, rate: 0.35 },
+      { upTo: null, rate: 0.37 },
+    ],
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Contribution limits — 2026 IRS values, verified 2026-08-30 (VARIABLES §1.5)

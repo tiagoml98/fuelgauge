@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -17,7 +17,7 @@ never on hash-stability timing. The suite runs against its own strict-port dev s
 (playwright.config webServer, port 5199, `reuseExistingServer: false`) so an ambient or stale
 server can never be silently reused.
 
-## 1. PersistedState fields (schema v1) — 67/67
+## 1. PersistedState fields (schema v1) — 68/68
 
 | Field | Test |
 |---|---|
@@ -44,7 +44,8 @@ server can never be silently reused.
 | assumptions.returnOverrides (cash + per-account) | PS:maximal (cash 3.5% + trad401k 6%) |
 | assumptions.fees | PS:maximal |
 | assumptions.dividendYield / dividendTaxRate | PS:maximal |
-| assumptions.taxMode | PS:maximal (simple; bracket disabled in UI by design) |
+| assumptions.taxMode | PS:maximal (bracket) · BR:mode-toggle (live select, switch → state) |
+| assumptions.bracketTables (M7, optional — persisted only once edited) | PS:maximal (edited tables both statuses) · BR:mode-toggle (edit materializes, reset → absent) |
 | assumptions.marginalRateNow / effectiveRetirementRate / ltcgRate | PS:maximal |
 | assumptions.limits (×10 fields) | PS:maximal (deferral401k 25k) · SE:limit-warning reads deferral401k |
 | assumptions.hsaCoverage | PS:maximal · LT:two-filers (family switch) |
@@ -97,7 +98,7 @@ output §5, schedule semantics §4) are engine rules covered by the 158-test uni
 semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output → EQ + DD (run-path
 table/tooltip/bridge equality).
 
-## 3. UI controls — 74/74
+## 3. UI controls — 78/78
 
 | Control | Test |
 |---|---|
@@ -142,6 +143,10 @@ table/tooltip/bridge equality).
 | Advanced: cash return / fees / dividend fields | PS:maximal |
 | Advanced: scenario return override add/remove | PS:maximal |
 | Advanced: tax fields | PS:maximal |
+| Tax mode select — LIVE (M7): bracket hides the effective-rate input + its sensitivity row | BR:mode-toggle |
+| Bracket editor (M7): standard deduction, per-bracket rate/upTo rows (blank = top), + bracket, delete, reset to current federal, LTCG flat note | BR:mode-toggle (edit → state, reset, 16,100 default rendered) |
+| Rate-arbitrage computed line (M7 bracket): "this year (D): X% — computed from your brackets" | BR:hand-check (8.5% = engine value) |
+| Crosshair effective-rate line (M7 bracket) | BR:hand-check (rendered at 65) |
 | Advanced: 10 limit fields | PS:maximal · SE:limit-warning |
 | Advanced: horizon/SWR/coast/barista/HSA treatment/coverage | PS:maximal |
 | Advanced: plan toggles + access-age overrides | PS:maximal |
@@ -189,7 +194,7 @@ table/tooltip/bridge equality).
 | Medical slice editor "Medical spending (part of total)" (renamed M6.3) — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
 | HSA last resort — funded past pot-death, depleted only at HSA zero (M6.2 #2) | DD:hsa-last-resort (spans text, taxed draw in table, gap only at 89) + engine shape tests |
 
-## 5. Compare-tab controls (M6 re-audit + M6.1) — 22/22
+## 5. Compare-tab controls (M6 re-audit + M6.1 + M7) — 23/23
 
 `CP` = compare.spec, `CM` = compare-manage.spec. All under the console guard.
 
@@ -203,6 +208,7 @@ table/tooltip/bridge equality).
 | Baseline picker (≥ 2 distinct runs only) | CP:baseline-deltas · CM:single-cell (absent with 1) |
 | Delta table (signed, lens rule; never a self-delta) | CP:hand-case · CP:baseline-deltas · CM:single-cell (absent with 1) |
 | Preset: Traditional vs Roth equal take-home + §8 driver note | CP:equal-take-home + unit presets tests |
+| Preset note, bracket mode (M7): computed average rates per path, no constant-ratio claim | BR:preset-note |
 | Preset: stop contributing at X (age input) | CP:normalized-presets |
 | Preset: reduce 401k to Y at Z (two inputs) | CP:normalized-presets |
 | Preset: retire at X vs Y (two inputs) | CP:retire-pair |
@@ -220,4 +226,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 277/277 items covered (72 state fields + 71 VARIABLES rows + 86 Growth + 25 Drawdown + 22 Compare + 1 route-removal check). M6.1 re-audit: +4 state fields, +5 Drawdown, +8 Compare over the M6 count of 250; de-flake patch +1; M6.2 re-audit: +2 state fields (basis explicit-entry trio, strategies[].medical), +3 Growth-panel items (basis UX, Advanced sections, sensitivity hints), +2 Drawdown items (medical slice, HSA last resort), +2 visual items (variant-B cards, overlay scrollbars).**
+**Manifest: 283/283 items covered (73 state fields + 71 VARIABLES rows + 90 Growth + 25 Drawdown + 23 Compare + 1 route-removal check). M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

@@ -19,7 +19,13 @@
 import { accessOpen, rothEarningsOpen } from './access';
 import { rothIraTotal, type FilerState, type SimContext } from './accumulate';
 import { HSA_NONQUALIFIED_PENALTY, HSA_PENALTY_ENDS_AGE, ROTH_SEASONING_YEARS } from './defaults';
-import { grossFromNet, preTaxWithdrawalRate, taxableSaleRate } from './tax';
+import {
+  grossFromNet,
+  grossOrdinaryFromNet,
+  marginalOrdinaryTax,
+  preTaxWithdrawalRate,
+  taxableSaleRate,
+} from './tax';
 import type { AccessMap, AccountId, WithdrawalSource } from './types';
 
 const EPS = 0.005; // sub-cent
@@ -84,10 +90,38 @@ export function withdrawYear(
     return { gross, net };
   };
 
+  /**
+   * M7: ORDINARY-INCOME draws (pre-tax accounts, non-Roth HSA). Bracket mode
+   * grosses up against the year's running pool and pushes the taxable slice
+   * into it so successive draws stack marginally; simple mode is the flat
+   * path, byte-identical to before. `extraFlat` = the pre-65 HSA penalty.
+   */
+  const drawOrdinary = (balance: number, basis: number, extraFlat = 0): { gross: number; net: number } => {
+    const tc = ctx.taxCtx;
+    if (tc === undefined) {
+      return drawTaxed(balance, basis, Math.min(preTaxRate + extraFlat, 0.99));
+    }
+    if (balance <= EPS || remaining <= EPS) return { gross: 0, net: 0 };
+    const taxableFrac = Math.max(0, balance - basis) / balance;
+    const maxNet =
+      balance -
+      marginalOrdinaryTax(tc.pool, balance * taxableFrac, tc.table, tc.stateRate) -
+      extraFlat * balance;
+    const net = Math.min(remaining, maxNet);
+    const gross =
+      net >= maxNet - EPS
+        ? balance
+        : grossOrdinaryFromNet(net, tc.pool, taxableFrac, tc.table, tc.stateRate, extraFlat);
+    tc.pool += gross * taxableFrac;
+    taxPaid += gross - net;
+    remaining -= net;
+    return { gross, net };
+  };
+
   const drawPreTaxAccount = (s: FilerState, id: 'trad401k' | 'tradIra') => {
     const balance = id === 'trad401k' ? s.trad401k : s.tradIra;
     const basis = id === 'tradIra' ? s.tradIraBasis : 0;
-    const { gross } = drawTaxed(balance, basis, preTaxRate);
+    const { gross } = drawOrdinary(balance, basis);
     if (gross <= 0) return;
     if (id === 'trad401k') {
       s.matchTrad = Math.max(0, s.matchTrad - gross * (s.matchTrad / balance));
@@ -194,7 +228,7 @@ export function withdrawYear(
         for (let f = 0; f < ctx.filers.length && remaining > EPS; f++) {
           const s = ctx.filers[f];
           if (!accessOpen(ages[f], access[f]?.hsa)) continue;
-          const { gross } = drawTaxed(s.hsa, 0, preTaxRate);
+          const { gross } = drawOrdinary(s.hsa, 0);
           if (gross > 0) {
             s.hsa -= gross;
             record('hsa', gross);
@@ -222,8 +256,7 @@ export function withdrawYear(
       if (remaining <= EPS || s.hsa <= EPS) continue;
       // nonqualified: ordinary income (+ state), +20% penalty before 65
       const penalty = ages[f] < HSA_PENALTY_ENDS_AGE ? HSA_NONQUALIFIED_PENALTY : 0;
-      const rate = Math.min(preTaxRate + penalty, 0.99);
-      const { gross } = drawTaxed(s.hsa, 0, rate);
+      const { gross } = drawOrdinary(s.hsa, 0, penalty);
       if (gross > 0) {
         s.hsa -= gross;
         record('hsa', gross);

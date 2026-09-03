@@ -386,6 +386,11 @@ export interface RunYear {
   age: number;
   year: number;
   accounts: Record<AccountId, BalanceSnapshot>;
+  /**
+   * M7: per-account ATE as the ENGINE valued it (bracket-mode valuation rate
+   * included) — UI and the table script must render this, never recompute.
+   */
+  ate: Record<AccountId, number>;
   buckets: Record<Bucket, { gross: number; ate: number }>;
   total: number;
   totalAte: number;
@@ -409,6 +414,16 @@ export interface RunYear {
    * unmet need (the bridge problem), 'depleted' when nothing is left.
    */
   gapKind?: 'locked' | 'depleted';
+  /**
+   * M7 bracket mode, drawdown years: the year's ordinary income (income-row
+   * taxable slices + taxable withdrawal slices + drawdown cash interest), the
+   * bracket tax on it, and tax ÷ income — the COMPUTED effective rate that
+   * replaces the simple-mode input. Undefined in simple mode or when the year
+   * has no ordinary income.
+   */
+  ordinaryIncome?: number;
+  ordinaryTax?: number;
+  effectiveOrdinaryRate?: number;
   events: MarkerEvent[];
 }
 

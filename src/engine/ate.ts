@@ -6,6 +6,7 @@
  */
 
 import { ACCOUNT_BUCKET, ALL_ACCOUNTS } from './defaults';
+import { ordinaryTax, resolveBracketTable } from './tax';
 import type { AccountId, Assumptions, BalanceSnapshot, Bucket, RunYear } from './types';
 
 /** balance − (balance − basis) × rate; never taxes a negative gain. */
@@ -13,11 +14,28 @@ function afterTaxOfGain(balance: number, basis: number, rate: number): number {
   return balance - Math.max(0, balance - basis) * rate;
 }
 
+/**
+ * M7: the pre-tax valuation rate outside a run (Growth tab, no strategy).
+ * Bracket mode prices liquidating the FIRE spending target through today's
+ * table from a zero pool; falls back to the flat effective rate when no
+ * target exists so pre-tax never shows at face value. Simple mode: flat
+ * effective + state, as always.
+ */
+export function growthAteRate(a: Assumptions): number {
+  if (a.taxMode !== 'bracket' || a.fireSpendingTarget <= 0) {
+    return a.effectiveRetirementRate + a.stateTaxRate;
+  }
+  const table = resolveBracketTable(a, 0);
+  return ordinaryTax(a.fireSpendingTarget, table, a.stateTaxRate) / a.fireSpendingTarget;
+}
+
 export function ateByAccount(
   accounts: Record<AccountId, BalanceSnapshot>,
   a: Assumptions,
+  /** M7 bracket mode: the run's valuation rate for pre-tax balances. */
+  preTaxRateOverride?: number,
 ): Record<AccountId, number> {
-  const preTaxRate = a.effectiveRetirementRate + a.stateTaxRate;
+  const preTaxRate = preTaxRateOverride ?? growthAteRate(a);
   const gainRate = a.ltcgRate + a.stateTaxRate;
   return {
     trad401k: afterTaxOfGain(accounts.trad401k.balance, accounts.trad401k.basis, preTaxRate),

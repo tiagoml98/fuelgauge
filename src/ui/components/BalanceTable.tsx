@@ -4,7 +4,6 @@
  * flows deflate with the start-of-year exponent (M3 correction #1).
  */
 
-import { ateByAccount } from '../../engine/ate';
 import { timingExponent, toReal } from '../../engine/schedule';
 import type { Assumptions, DisplayState, RunYear } from '../../engine/types';
 import { ACCOUNT_LABELS, ACCOUNT_ORDER } from '../theme/colors';
@@ -72,7 +71,7 @@ export function BalanceTable({
           </thead>
           <tbody className="text-neutral-800 dark:text-neutral-200">
             {rows.map((y) => {
-              const ate = display.ate ? ateByAccount(y.accounts, a) : null;
+              const ate = display.ate ? y.ate : null; // M7: the ENGINE's valuation, never recomputed
               return (
                 <tr key={y.age} data-age={y.age} className="border-b border-neutral-100 dark:border-neutral-800">
                   <td className="py-1 text-left">{y.age}</td>

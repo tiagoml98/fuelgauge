@@ -28,11 +28,12 @@ import {
   resolveLimits,
 } from './limits';
 import { resolveSchedule } from './schedule';
-import { cashInterestTax, dividendDrag } from './tax';
+import { cashInterestTax, dividendDrag, marginalOrdinaryTax } from './tax';
 import type {
   AccountId,
   Assumptions,
   BalanceSnapshot,
+  BracketTable,
   FilerGrowthInputs,
   GrowthScenario,
   MarkerEvent,
@@ -114,6 +115,15 @@ export interface SimContext {
   taxableBasis: number;
   cash: number;
   cumulativeTax: number;
+  /**
+   * M7 bracket mode, per drawdown year: the running ordinary-income pool and
+   * that year's indexed table. run.ts resets and seeds it each year; the
+   * withdrawal walk and drawdown cash interest stack onto it. Absent in
+   * simple mode and during accumulation.
+   */
+  taxCtx?: { pool: number; table: BracketTable; stateRate: number };
+  /** M7 bracket mode: the run's pre-tax ATE valuation rate (set by run.ts). */
+  ateRate?: number;
   /** One-time note keys already emitted. */
   noted: Set<string>;
   zeroed: AccountId[];
@@ -296,7 +306,13 @@ export function growYear(
   }
   if (a.include.cash) {
     const interest = ctx.cash * returns.cash[t];
-    const tax = cashInterestTax(interest, phase, a);
+    // M7: in bracket mode, drawdown-year interest is ordinary income stacked
+    // on the year's pool at its marginal increment; accumulation stays flat
+    const tax =
+      phase === 'drawdown' && ctx.taxCtx !== undefined
+        ? marginalOrdinaryTax(ctx.taxCtx.pool, interest, ctx.taxCtx.table, ctx.taxCtx.stateRate)
+        : cashInterestTax(interest, phase, a);
+    if (phase === 'drawdown' && ctx.taxCtx !== undefined) ctx.taxCtx.pool += interest;
     ctx.cash += interest - tax;
     taxPaid += tax;
   }
@@ -583,7 +599,7 @@ export function takeSnapshot(
     taxable: { balance: ctx.taxable, basis: ctx.taxableBasis },
     cash: { balance: ctx.cash, basis: ctx.cash },
   };
-  const ate = ateByAccount(accounts, a);
+  const ate = ateByAccount(accounts, a, ctx.ateRate);
   const buckets = rollupBuckets(accounts, ate);
   const total = ALL_ACCOUNTS.reduce((acc, id) => acc + accounts[id].balance, 0);
   const totalAte = ALL_ACCOUNTS.reduce((acc, id) => acc + ate[id], 0);
@@ -591,6 +607,7 @@ export function takeSnapshot(
     age,
     year,
     accounts,
+    ate, // M7: snapshot so UI/table render the SAME valuation the engine used
     buckets,
     total,
     totalAte,

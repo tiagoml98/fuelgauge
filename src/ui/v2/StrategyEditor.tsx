@@ -201,7 +201,7 @@ export function StrategyEditor({
         </div>
       </Group>
 
-      <Group title="Retirement income" hint="offsets need; simple mode taxes it (SS at 85%)" defaultOpen={w.income.length > 0}>
+      <Group title="Retirement income" hint="offsets need — taxed (SS at 85% taxable in both modes)" defaultOpen={w.income.length > 0}>
         {w.income.map((row, i) => (
           <div key={i} className="mt-1.5 rounded-md border border-neutral-200 p-2 dark:border-neutral-800">
             <div className="flex items-center gap-1.5">

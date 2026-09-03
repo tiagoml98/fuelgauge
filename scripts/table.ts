@@ -11,7 +11,6 @@
 
 import { readFileSync } from 'node:fs';
 import { simulateAccumulation } from '../src/engine/accumulate';
-import { ateByAccount } from '../src/engine/ate';
 import { ALL_ACCOUNTS } from '../src/engine/defaults';
 import { strategyHasSpending } from '../src/engine/metrics';
 import { migratePersistedState } from '../src/engine/persist';
@@ -66,7 +65,9 @@ const startAge = a.filers[0].currentAge;
 const yearsFromNow = (y: RunYear) => y.age - startAge;
 
 const EXTRA = run ? (['need', 'wdrawn', 'gap'] as const) : ([] as const);
-const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax', ...EXTRA] as const;
+// M7: bracket-mode runs get the year's ordinary income + computed rate
+const BRACKET = run && a.taxMode === 'bracket' ? (['ordInc', 'effRate'] as const) : ([] as const);
+const COLS = [...ALL_ACCOUNTS, 'total', 'totalAte', 'tax', 'cumTax', ...EXTRA, ...BRACKET] as const;
 type Col = (typeof COLS)[number];
 const WIDTH = 13;
 
@@ -89,6 +90,12 @@ function nominalValue(y: RunYear, col: Col): number | string {
       return wdTotal(y);
     case 'gap':
       return y.gap ? 'GAP' : '';
+    case 'ordInc':
+      return y.ordinaryIncome ?? 0;
+    case 'effRate':
+      return y.effectiveOrdinaryRate === undefined
+        ? ''
+        : `${(y.effectiveOrdinaryRate * 100).toFixed(1)}%`;
     default:
       return y.accounts[col].balance;
   }
@@ -96,10 +103,13 @@ function nominalValue(y: RunYear, col: Col): number | string {
 
 function ateNominalValue(y: RunYear, col: Col): number | string {
   if (col === 'total' || col === 'totalAte') return y.totalAte;
-  if (col === 'tax' || col === 'cumTax' || col === 'need' || col === 'wdrawn' || col === 'gap') {
+  if (
+    col === 'tax' || col === 'cumTax' || col === 'need' || col === 'wdrawn' ||
+    col === 'gap' || col === 'ordInc' || col === 'effRate'
+  ) {
     return nominalValue(y, col);
   }
-  return ateByAccount(y.accounts, a)[col];
+  return y.ate[col]; // M7: the engine's valuation, never recomputed
 }
 
 function printSection(title: string, value: (y: RunYear, col: Col) => number | string) {

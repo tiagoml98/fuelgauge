@@ -66,6 +66,21 @@ function maximalState(): PersistedState {
     effectiveRetirementRate: 0.1,
     ltcgRate: 0.18,
     limits: { ...s.assumptions.limits, deferral401k: 25_000 },
+    // M7: bracket mode + an edited table round-trip
+    taxMode: 'bracket',
+    bracketTables: {
+      single: {
+        standardDeduction: 17_000,
+        brackets: [
+          { upTo: 15_000, rate: 0.1 },
+          { upTo: null, rate: 0.3 },
+        ],
+      },
+      marriedJoint: {
+        standardDeduction: 32_200,
+        brackets: [{ upTo: null, rate: 0.25 }],
+      },
+    },
     hsaCoverage: 'family',
     horizonAge: 92,
     hsaTreatment: 'nonMedical',

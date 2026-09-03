@@ -579,3 +579,115 @@ describe('run odds and ends', () => {
     expect(run.drawdownStartAge).toBe(55);
   });
 });
+
+describe('bracket mode (M7)', () => {
+  // The hand-check shape (examples/bracket.json): single filer 64, r = 0,
+  // unindexed, no dividends/fees, drawdown 65 on 60k spending with a 20k SS
+  // row. Year 65: pool = 17,000 (85% of SS); income tax = (17,000 − 16,100)
+  // × 10% = 90.00 → incomeNet 19,910 → netNeed 40,090. Gross-up from the
+  // pool: 11,500 at 10% nets 10,350, the rest at 12% → gross 45,295.45;
+  // total tax 90 + 5,205.45 = 5,295.45 = ordinaryTax(62,295.45).
+  const handA = () =>
+    makeA((x) => {
+      x.taxMode = 'bracket';
+      x.filers = [{ currentAge: 64 }];
+      x.balances.perFiler[0].trad401k = 2_000_000;
+    });
+  const handW = () =>
+    makeW((x) => {
+      x.drawdownStartAge = 65;
+      x.spending = flat(60_000);
+      x.income = [{ kind: 'socialSecurity', fromAge: 65, toAge: null, amount: 20_000 }];
+    });
+
+  it('golden year to the cent: SS 85% seeds the pool, deduction first, marginal stacking, gross-up', () => {
+    const run = simulateRun(handA(), makeG(), handW());
+    const y65 = rowAt(run.years, 65);
+    expect(y65.ordinaryIncome).toBeCloseTo(17_000 + 45_295.454545, 2);
+    expect(y65.withdrawals?.tradIra).toBeCloseTo(45_295.454545, 2);
+    expect(y65.taxPaidThisYear).toBeCloseTo(5_295.454545, 2);
+    expect(y65.ordinaryTax).toBeCloseTo(5_295.454545, 2);
+    expect(y65.effectiveOrdinaryRate).toBeCloseTo(5_295.454545 / 62_295.454545, 6);
+    expect(y65.gap).toBe(false);
+  });
+
+  it('spending sweep 50k/100k/200k → strictly increasing effective rates (feedback #1)', () => {
+    const rates = [50_000, 100_000, 200_000].map((spend) => {
+      const w = makeW((x) => {
+        x.drawdownStartAge = 65;
+        x.spending = flat(spend);
+      });
+      const run = simulateRun(handA(), makeG(), w);
+      return rowAt(run.years, 65).effectiveOrdinaryRate!;
+    });
+    expect(rates[0]).toBeGreaterThan(0);
+    expect(rates[1]).toBeGreaterThan(rates[0]);
+    expect(rates[2]).toBeGreaterThan(rates[1]);
+  });
+
+  it('Roth mix (feedback #2): ≤ ordinary income and tax every year; strictly lower while all-pre-tax draws pre-tax', () => {
+    const wMix = makeW((x) => {
+      x.drawdownStartAge = 65;
+      x.spending = flat(60_000);
+      x.order = ['rothBasis', 'preTax'];
+    });
+    const allPre = simulateRun(handA(), makeG(), wMix);
+    const aMix = handA();
+    aMix.balances.perFiler[0].trad401k = 1_000_000;
+    aMix.balances.perFiler[0].rothIra = {
+      basis: 1_000_000,
+      conversions: [],
+      earnings: 0,
+      firstFundedYear: 2000,
+    };
+    const mix = simulateRun(aMix, makeG(), wMix);
+    for (let age = 65; age <= 90; age++) {
+      const p = rowAt(allPre.years, age);
+      const m = rowAt(mix.years, age);
+      expect(m.ordinaryIncome ?? 0).toBeLessThanOrEqual((p.ordinaryIncome ?? 0) + 0.005);
+      expect(m.ordinaryTax ?? 0).toBeLessThanOrEqual((p.ordinaryTax ?? 0) + 0.005);
+      if ((p.withdrawals?.tradIra ?? 0) + (p.withdrawals?.trad401k ?? 0) > 0.005 && (m.withdrawals?.rothIra ?? 0) > 0.005) {
+        expect(m.ordinaryTax ?? 0).toBeLessThan(p.ordinaryTax!);
+      }
+    }
+  });
+
+  it('drawdown cash interest joins the pool at its marginal rate; accumulation interest stays flat', () => {
+    const a = makeA((x) => {
+      x.taxMode = 'bracket';
+      x.filers = [{ currentAge: 63 }];
+      x.balances.cash = 500_000;
+      x.balances.perFiler[0].trad401k = 1_000_000;
+      x.returnOverrides = { cash: flat(0.04) };
+    });
+    const w = makeW((x) => {
+      x.drawdownStartAge = 65;
+      x.spending = flat(30_000);
+      x.order = ['preTax', 'cash'];
+    });
+    const run = simulateRun(a, makeG(), w);
+    // accumulation year 64: flat marginal-now on interest (24%) — unchanged rule
+    expect(rowAt(run.years, 64).taxPaidThisYear).toBeCloseTo(500_000 * 0.04 * 0.24, 2);
+    // drawdown year 65: interest is IN the pool → total tax telescopes to ordinaryTax(pool)
+    const y65 = rowAt(run.years, 65);
+    const gross = y65.withdrawals?.tradIra ?? 0;
+    const interest = rowAt(run.years, 64).accounts.cash.balance * 0.04; // cash untouched by the draw
+    expect(y65.ordinaryIncome).toBeCloseTo(gross + interest, 2);
+    expect(y65.taxPaidThisYear).toBeCloseTo(y65.ordinaryTax!, 2);
+  });
+
+  it('ATE valuation stacks on the year-D income pool (refinement #2): SS makes pre-tax dearer, not cheaper', () => {
+    const noSS = makeW((x) => {
+      x.drawdownStartAge = 65;
+      x.spending = flat(60_000);
+    });
+    const runNoSS = simulateRun(handA(), makeG(), noSS);
+    const runSS = simulateRun(handA(), makeG(), handW());
+    // with the 17k pool underneath, the same 60k spend prices at a HIGHER rate
+    const ateNoSS = rowAt(runNoSS.years, 65).ate.tradIra;
+    const ateSS = rowAt(runSS.years, 65).ate.tradIra;
+    const balNoSS = rowAt(runNoSS.years, 65).accounts.tradIra.balance;
+    const balSS = rowAt(runSS.years, 65).accounts.tradIra.balance;
+    expect(ateSS / balSS).toBeLessThan(ateNoSS / balNoSS); // more tax priced in
+  });
+});

@@ -15,11 +15,14 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useMemo, type ReactNode } from 'react';
+import { DEFAULT_BRACKET_TABLES } from '../../engine/defaults';
 import { coastFireAge } from '../../engine/metrics';
 import { toReal } from '../../engine/schedule';
 import type {
   AccountId,
   Assumptions,
+  BracketRow,
+  BracketTable,
   EmployerMatch,
   FilerGrowthInputs,
   GrowthScenario,
@@ -101,6 +104,93 @@ function SensitivityRow({
         </span>
       ))}
     </p>
+  );
+}
+
+/**
+ * M7: editable deduction + brackets for the ACTIVE filing status (the other
+ * status keeps its own table in state). Bounds are TAXABLE-income tops
+ * (after the deduction); blank upTo = top bracket. Defaults = 2026 federal;
+ * editing materializes the tables into state, reset returns to defaults.
+ */
+function BracketEditor({
+  a,
+  patchA,
+}: {
+  a: Assumptions;
+  patchA: (patch: Partial<Assumptions>) => void;
+}) {
+  const table = a.bracketTables?.[a.filingStatus] ?? DEFAULT_BRACKET_TABLES[a.filingStatus];
+  const patchTable = (next: BracketTable) =>
+    patchA({
+      bracketTables: {
+        ...DEFAULT_BRACKET_TABLES,
+        ...a.bracketTables,
+        [a.filingStatus]: next,
+      },
+    });
+  const patchBracket = (i: number, p: Partial<BracketRow>) =>
+    patchTable({ ...table, brackets: table.brackets.map((b, j) => (j === i ? { ...b, ...p } : b)) });
+
+  return (
+    <div className="py-2" data-testid="bracket-editor">
+      <span className="text-[13px] font-medium text-neutral-800 dark:text-neutral-200">
+        Brackets — {a.filingStatus === 'single' ? 'single' : 'married filing jointly'}
+      </span>
+      <p className="text-xs text-neutral-500">
+        taxable-income tops (after the deduction), indexed with inflation; state rate rides on top of every bracket
+      </p>
+      <FieldRow
+        label="Standard deduction"
+        control={<MoneyInput value={table.standardDeduction} min={0} onCommit={(v) => patchTable({ ...table, standardDeduction: v })} aria-label="Standard deduction" />}
+      />
+      {table.brackets.map((b, i) => (
+        <div key={i} className="mt-1 flex items-center gap-1.5">
+          <PercentInput className="w-20" value={b.rate} onCommit={(v) => patchBracket(i, { rate: v })} aria-label={`Bracket ${i + 1} rate`} />
+          <span className="text-xs text-neutral-400">up to</span>
+          <DraftNumberInput
+            className="min-w-0 flex-1"
+            value={b.upTo ?? 0}
+            format={(v) => (v === 0 ? '' : v.toLocaleString('en-US'))}
+            parse={(raw) => {
+              const t = raw.replaceAll(',', '').trim();
+              if (t === '') return 0;
+              const n = Number(t);
+              return Number.isFinite(n) && n > 0 ? n : null;
+            }}
+            onCommit={(v) => patchBracket(i, { upTo: v === 0 ? null : v })}
+            placeholder="top bracket"
+            invalidMessage="amount"
+            aria-label={`Bracket ${i + 1} up to`}
+          />
+          <Button variant="ghost" size="sm" className="h-7 px-1.5 text-neutral-400 hover:text-red-500" aria-label={`delete bracket ${i + 1}`} onClick={() => patchTable({ ...table, brackets: table.brackets.filter((_, j) => j !== i) })}>
+            ×
+          </Button>
+        </div>
+      ))}
+      <div className="mt-1.5 flex gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => {
+            const last = table.brackets[table.brackets.length - 1];
+            patchTable({ ...table, brackets: [...table.brackets, { upTo: null, rate: (last?.rate ?? 0.3) + 0.02 }] });
+          }}
+        >
+          + bracket
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() => patchA({ bracketTables: undefined })}
+          disabled={a.bracketTables === undefined}
+        >
+          reset to current federal
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -465,20 +555,43 @@ export function AdvancedPanel({ a, g }: { a: Assumptions; g: GrowthScenario }) {
         </div>
       </Group>
 
-      <Group title="Taxes (simple mode)">
-        <FieldRow label="Marginal rate now" description="prices every deferred dollar today — the traditional side of the rate arbitrage" control={<PercentInput value={a.marginalRateNow} onCommit={(v) => patchA({ marginalRateNow: v })} aria-label="Marginal rate" />} />
-        <FieldRow label="Effective retirement rate" description="prices every pre-tax dollar at withdrawal — deliberately effective, not marginal" control={<PercentInput value={a.effectiveRetirementRate} onCommit={(v) => patchA({ effectiveRetirementRate: v })} aria-label="Effective rate" />} />
-        <SensitivityRow
-          testid="sensitivity-rate"
-          label="Traditional vs Roth if this rate is…"
-          cells={[
-            { k: '−5 pts', v: sensitivity.edge.down },
-            { k: 'now', v: sensitivity.edge.base, now: true },
-            { k: '+5 pts', v: sensitivity.edge.up },
-          ]}
+      <Group title="Taxes">
+        <FieldRow
+          label="Tax mode"
+          description={a.taxMode === 'bracket' ? 'brackets compute each year’s actual tax — the effective rate becomes an output' : 'flat rates everywhere'}
+          control={
+            <Select value={a.taxMode} onValueChange={(v) => patchA({ taxMode: v as Assumptions['taxMode'] })}>
+              <SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900" aria-label="Tax mode">
+                <SelectValue>{a.taxMode === 'bracket' ? 'Bracket' : 'Simple (flat rates)'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="simple">Simple (flat rates)</SelectItem>
+                <SelectItem value="bracket">Bracket — deduction + brackets, indexed</SelectItem>
+              </SelectContent>
+            </Select>
+          }
         />
-        <FieldRow label="LTCG rate" control={<PercentInput value={a.ltcgRate} onCommit={(v) => patchA({ ltcgRate: v })} aria-label="LTCG rate" />} />
-        <FieldRow label="Tax mode" description="bracket mode arrives in Phase 2" control={<Select value="simple"><SelectTrigger size="sm" className="w-full bg-white dark:bg-neutral-900"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="simple">Simple (flat rates)</SelectItem></SelectContent></Select>} />
+        <FieldRow label="Marginal rate now" description="prices every deferred dollar today — the traditional side of the rate arbitrage" control={<PercentInput value={a.marginalRateNow} onCommit={(v) => patchA({ marginalRateNow: v })} aria-label="Marginal rate" />} />
+        {a.taxMode === 'simple' && (
+          <>
+            <FieldRow label="Effective retirement rate" description="prices every pre-tax dollar at withdrawal — deliberately effective, not marginal" control={<PercentInput value={a.effectiveRetirementRate} onCommit={(v) => patchA({ effectiveRetirementRate: v })} aria-label="Effective rate" />} />
+            <SensitivityRow
+              testid="sensitivity-rate"
+              label="Traditional vs Roth if this rate is…"
+              cells={[
+                { k: '−5 pts', v: sensitivity.edge.down },
+                { k: 'now', v: sensitivity.edge.base, now: true },
+                { k: '+5 pts', v: sensitivity.edge.up },
+              ]}
+            />
+          </>
+        )}
+        {a.taxMode === 'bracket' && <BracketEditor a={a} patchA={patchA} />}
+        <FieldRow
+          label="LTCG rate"
+          description={a.taxMode === 'bracket' ? 'stays FLAT even in bracket mode — no 0% LTCG bracket is modeled (ASSUMPTIONS T13)' : undefined}
+          control={<PercentInput value={a.ltcgRate} onCommit={(v) => patchA({ ltcgRate: v })} aria-label="LTCG rate" />}
+        />
       </Group>
 
       <Group title="Horizon, HSA & targets">

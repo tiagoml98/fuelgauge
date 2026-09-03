@@ -13,7 +13,7 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | T1 | Simple mode taxes all pre-tax withdrawals at one flat "effective" rate; if a marginal rate is entered there instead, retirement tax is overstated | → Roth | The rate is labeled "effective" in the UI to fight this |
 | T2 | No RMDs until Phase 2.5 | → against conversions | Pre-tax balances never get force-drained into high brackets, so the ladder's benefit is understated |
 | T3 | Social Security exists only if entered as a retirement-income row. Simple mode taxes it at 85% × effective rate; bracket mode treats 85% as taxable income | conservative if omitted | |
-| T4 | Simple mode taxes part-time and pension income at the flat effective rate | mildly optimistic for large income | Real earned income in retirement faces marginal rates; bracket mode (M7) fixes this |
+| T4 | Simple mode taxes part-time and pension income at the flat effective rate | mildly optimistic for large income | **Superseded in bracket mode (M7):** income rows' taxable slices seed the year's ordinary pool and are taxed through the deduction + brackets |
 | T5 | ACA subsidies before 65 not modeled | → conversions look cheaper | Ladder conversions during the bridge raise MAGI, which real subsidies are based on — check separately before acting |
 | T6 | IRMAA after 65 not modeled | → large conversions/RMDs look cheaper | Conversions or RMDs after 63 can raise Medicare premiums |
 | T7 | Windfalls are entered after tax; the model never taxes them | neutral | RSUs are taxed as income at vest, options at exercise/sale — enter the number that actually lands |
@@ -23,8 +23,12 @@ Every simplification the model makes, with the direction of bias it introduces. 
 | T11 | Mandatory Roth catch-up (gate #10) is modeled, but the real rule keys on **prior-year W-2 (Box 3) wages from that employer**; the model compares **current-year modeled salary**, and indexes the threshold by model inflation rather than IRS COLA | neutral, small | Off by one year around the threshold and blind to job changes |
 | T12 | No phase-outs: IRA deductibility is handled by the gate #11 default + basis tracking, Roth IRA income limits by the backdoor toggle — never enforced as law | → IRA strategies look freer | |
 | T13 | LTCG is a flat rate even in years when income would qualify for the 0% bracket | → against taxable | Overstates tax on taxable sales in low-income years (e.g. the bridge) |
-| T14 | Cash interest is taxed at two flat rates: marginal-now in accumulation, effective in drawdown | neutral-ish | A two-rate stand-in for ordinary-income treatment (gate #8) |
+| T14 | Cash interest: flat marginal-now in accumulation (both modes). Drawdown: flat effective in simple mode; in bracket mode (M7) the interest joins the year's ordinary pool at its marginal increment | neutral-ish | Dividend drag stays flat in both modes |
 | T15 | The equal-take-home preset (§8) assumes the traditional path's tax savings are invested in taxable, not spent | neutral (definitional) | Stated in the preset's explanation |
+| T16 | Bracket mode (M7): ordinary tax = Σ slices of max(0, income − standard deduction) × (bracket rate + flat state rate). The state rate rides on top of every bracket — no separate state deduction or state brackets | neutral-ish | Deduction and bracket bounds index with inflation at the start-of-year exponent, in step with spending; rates never index |
+| T17 | Bracket mode omits the additional standard deduction at 65+ and the temporary senior deduction — tax after 65 is overstated, slightly biasing toward Roth | → Roth after 65 | Slotted for M10 with RMDs, where post-65 tax matters most |
+| T18 | LTCG stays FLAT in bracket mode — no 0% LTCG bracket, no stacking on ordinary income (T13 stands and is more visible now) | → against taxable | Noted on the Taxes group in the UI |
+| T19 | Bracket-mode ATE valuation: pre-tax balances are priced at the marginal rate of liquidating the first-drawdown-year spending ON TOP of that year's income-row taxable slices (one rate per run). The Growth tab, which has no strategy, prices the FIRE spending target from a zero pool — the two tabs can differ slightly; zero-target states fall back to the flat effective rate | neutral (definitional) | The engine snapshots its per-account ATE on every year so UI and table always render exactly what it computed |
 
 ## 2. Modeling and timing simplifications
 

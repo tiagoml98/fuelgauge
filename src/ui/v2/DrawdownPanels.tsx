@@ -13,10 +13,21 @@ import { formatSpans, type RunTiles } from './lens';
 
 const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 
-export function RateArbitragePanel({ a }: { a: Assumptions }) {
+export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult | null }) {
   const now = a.marginalRateNow;
-  const later = a.effectiveRetirementRate + a.stateTaxRate;
+  // M7: in bracket mode the effective rate is an OUTPUT — the first drawdown
+  // year with ordinary income shows its computed rate
+  const bracketYear = a.taxMode === 'bracket'
+    ? run?.years.find((y) => y.age >= run.drawdownStartAge && y.effectiveOrdinaryRate !== undefined)
+    : undefined;
+  const later = bracketYear?.effectiveOrdinaryRate ?? a.effectiveRetirementRate + a.stateTaxRate;
   const deltaCents = Math.round(Math.abs(now - later) * 100);
+  const laterLabel =
+    a.taxMode === 'bracket'
+      ? bracketYear
+        ? `this year (${bracketYear.age}): ${pct(later)} — computed from your brackets`
+        : 'no ordinary income yet — computed from your brackets'
+      : 'effective after access';
   const verdict =
     now > later
       ? `Deferring at ${pct(now)} and withdrawing at ${pct(later)} keeps ${deltaCents}¢ of every pre-tax dollar — on rates alone, traditional wins.`
@@ -40,8 +51,8 @@ export function RateArbitragePanel({ a }: { a: Assumptions }) {
           <div className="text-[11px] text-neutral-500">conversion years (Phase 2 ladder)</div>
         </div>
         <div>
-          <div className="tnum text-xl font-semibold">{pct(later)}</div>
-          <div className="text-[11px] text-neutral-500">effective after access</div>
+          <div className="tnum text-xl font-semibold" data-testid="rate-later">{bracketYear || a.taxMode === 'simple' ? pct(later) : '—'}</div>
+          <div className="text-[11px] text-neutral-500">{laterLabel}</div>
         </div>
       </div>
       <p className="text-xs leading-5 text-neutral-600 dark:text-neutral-400">{verdict}</p>

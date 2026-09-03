@@ -62,15 +62,15 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 
 **Cash taxation (gate #8):** cash interest is ordinary income, taxed annually — at the marginal-now rate during accumulation, at the effective retirement rate during drawdown (bracket mode: the schedule, M7).
 
-### 1.4 Taxes (simple mode; bracket mode is M7)
+### 1.4 Taxes (simple mode + bracket mode, M7)
 
 | Name | Layer | Unit | Default | Valid range | Consumed by |
 |---|---|---|---|---|---|
-| Tax mode | Assumptions | enum: simple \| bracket *(P2)* | simple | those two | tax (M2/M3, M7) |
+| Tax mode | Assumptions | enum: simple \| bracket | simple | those two | tax (M2/M3, M7 — live toggle; bracket hides the effective-rate input and computes it per year) |
 | Marginal rate now | Assumptions | % | 24% | 0–50% | cash-interest tax in accumulation (M2), trad-vs-Roth comparison §8 (M6), conversion tax *(P2)* |
 | Effective rate on pre-tax withdrawals (labeled "effective") | Assumptions | % | 12% | 0–50% | ate (M2), drawdown gross-up (M3), cash-interest tax in drawdown (M3), simple-mode retirement-income tax (M3, gate #9) |
 | LTCG rate | Assumptions | % | 15% | 0–30% | ate (M2), tax on taxable sale (M3) |
-| Standard deduction + bracket tables per filing status *(P2)* | Assumptions | table rows | current IRS, editable, indexed | — | tax (M7) |
+| Standard deduction + bracket tables per filing status | Assumptions | table rows (upTo = taxable-income top, null = top bracket) | 2026 federal, editable, indexed at the start-of-year exponent; persisted only once edited | rates 0–1, bounds ascending | tax (M7): income-row tax, withdrawal gross-up, drawdown interest, ATE valuation; M8 fill-to-bracket via roomToBracketTop |
 
 ### 1.5 Contribution limits (editable, indexed when toggle on)
 
@@ -154,7 +154,7 @@ All dollar schedules: rows `{from age, to age, value in today's $/yr}`, gaps = 0
 | Spending schedule | Withdrawal | schedule $/yr | real (today's $) | one row: FIRE spending target from drawdown start to horizon (gate #13) | ≥ 0 | drawdown need (M3), FIRE number (M3) |
 | Annual medical spending schedule | Withdrawal | schedule $/yr | real (today's $) | empty (0) | ≥ 0; a SLICE of spending, not added to it | drawdown (M6.2 #2): paid from the HSA first, tax-free at any age; also caps the tax-free portion of last-resort HSA draws. Tends to rise with age — the UI hints this |
 | One-time expense rows | Withdrawal | rows {age, amount, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need (M3) |
-| Retirement income rows | Withdrawal | rows {type: part-time \| pension \| social-security, from age, to age, $/yr, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need offset (M3). **Simple mode taxes them (gate #9): part-time and pension at the effective rate, Social Security at 85% × effective.** Bracket mode (M7): brackets, SS 85% taxable |
+| Retirement income rows | Withdrawal | rows {type: part-time \| pension \| social-security, from age, to age, $/yr, label} | real (today's $, indexed) | none | ≥ 0 | drawdown need offset (M3). **Simple mode taxes them (gate #9): part-time and pension at the effective rate, Social Security at 85% × effective.** Bracket mode (M7): taxable slices (partTime/pension 100%, SS 85%) seed the year's ordinary pool; the deduction + brackets tax the total |
 | Withdrawal order | Withdrawal | ordered list of sources | n/a | **cash → invested taxable → pre-tax (once ≥ access age) → Roth basis → seasoned conversions → Roth earnings (once ≥ access age)**; HSA excluded under "medical" (gate #5 — corrects SPEC §1) | permutation | drawdown (M3). The access filter makes it self-adjusting: before access age, pre-tax is skipped and Roth basis fills the bridge; after, pre-tax goes first |
 | Conversion ladder rows *(P2)* | Withdrawal | rows {from, to, $} or {from, to, fill to top of N% bracket} | real | none | ≥ 0 | ladder (M8); taxablePortion = amount |
 

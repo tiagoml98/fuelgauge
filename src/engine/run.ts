@@ -27,7 +27,15 @@ import {
 import { PRETAX_ACCESS_AGE } from './defaults';
 import { withdrawYear } from './drawdown';
 import { resolveOneTime, resolveSchedule } from './schedule';
-import { preTaxWithdrawalRate, simpleIncomeTax, taxableSaleRate } from './tax';
+import {
+  marginalOrdinaryTax,
+  ordinaryTax,
+  preTaxWithdrawalRate,
+  resolveBracketTable,
+  simpleIncomeTax,
+  SS_TAXABLE_SHARE,
+  taxableSaleRate,
+} from './tax';
 import type {
   AccessMap,
   Assumptions,
@@ -74,7 +82,7 @@ function accessibleAte(
 ): { accessible: number; locked: number } {
   const { a } = ctx;
   const year = a.currentYear + t;
-  const preRate = preTaxWithdrawalRate(a);
+  const preRate = ctx.ateRate ?? preTaxWithdrawalRate(a); // M7: bracket valuation rate
   const saleRate = taxableSaleRate(a);
   let accessible =
     ctx.cash + (ctx.taxable - Math.max(0, ctx.taxable - ctx.taxableBasis) * saleRate);
@@ -145,6 +153,29 @@ export function simulateRun(
     kind: r.kind,
     values: resolveSchedule([{ fromAge: r.fromAge, toAge: r.toAge, value: r.amount }], startOpts),
   }));
+  const incomeSliceAt = (t: number): number =>
+    incomeRows.reduce(
+      (sum, row) =>
+        sum + (row.values[t] > 0 ? row.values[t] * (row.kind === 'socialSecurity' ? SS_TAXABLE_SHARE : 1) : 0),
+      0,
+    );
+
+  // M7 bracket mode: the pre-tax ATE valuation rate — priced by stacking the
+  // first drawdown year's spending ON TOP of that year's income-row taxable
+  // slices (a pension or early SS must not make pre-tax look cheaper to
+  // liquidate than it is). Falls back to the flat effective rate when the
+  // year-D spending is zero. Simple mode: flat effective + state, unchanged.
+  if (a.taxMode === 'bracket') {
+    const tD = D - ctx.startAge;
+    const spendD = spending[tD] > 0 ? spending[tD] : a.fireSpendingTarget;
+    if (spendD > 0) {
+      const tableD = resolveBracketTable(a, tD);
+      ctx.ateRate =
+        marginalOrdinaryTax(incomeSliceAt(tD), spendD, tableD, a.stateTaxRate) / spendD;
+    } else {
+      ctx.ateRate = a.effectiveRetirementRate + a.stateTaxRate;
+    }
+  }
 
   const notes: string[] = [];
   const rawStreams = [
@@ -235,16 +266,34 @@ export function simulateRun(
         }
       }
 
+      // M7 bracket mode: fresh ordinary-income pool + this year's indexed table
+      if (a.taxMode === 'bracket') {
+        ctx.taxCtx = { pool: 0, table: resolveBracketTable(a, t), stateRate: a.stateTaxRate };
+      }
+
       // Need: spending + one-time − net retirement income (gate #9);
       // surplus income is saved to cash (M3 decision #2)
       const grossNeed = spending[t] + oneTime[t];
       let incomeNet = 0;
-      for (const row of incomeRows) {
-        const amount = row.values[t];
-        if (amount > 0) {
-          const tax = simpleIncomeTax(row.kind, amount, a);
-          incomeNet += amount - tax;
-          taxPaid += tax;
+      if (ctx.taxCtx !== undefined) {
+        // Bracket mode: income rows' taxable slices SEED the pool (partTime /
+        // pension 100%, SS 85%); their collective tax comes off the top
+        let incomeGross = 0;
+        for (const row of incomeRows) {
+          if (row.values[t] > 0) incomeGross += row.values[t];
+        }
+        ctx.taxCtx.pool = incomeSliceAt(t);
+        const tax = ordinaryTax(ctx.taxCtx.pool, ctx.taxCtx.table, ctx.taxCtx.stateRate);
+        incomeNet = incomeGross - tax;
+        taxPaid += tax;
+      } else {
+        for (const row of incomeRows) {
+          const amount = row.values[t];
+          if (amount > 0) {
+            const tax = simpleIncomeTax(row.kind, amount, a);
+            incomeNet += amount - tax;
+            taxPaid += tax;
+          }
         }
       }
       let netNeed = grossNeed - incomeNet;
@@ -307,6 +356,16 @@ export function simulateRun(
     row.withdrawals = withdrawals;
     row.gap = gap;
     Object.assign(row, accessibleAte(ctx, t, access));
+    // M7 bracket mode: the year's ordinary income, its bracket tax, and the
+    // COMPUTED effective rate (all increments telescope to ordinaryTax(pool))
+    if (ctx.taxCtx !== undefined && age >= D) {
+      const { pool, table, stateRate } = ctx.taxCtx;
+      if (pool > 0.005) {
+        row.ordinaryIncome = pool;
+        row.ordinaryTax = ordinaryTax(pool, table, stateRate);
+        row.effectiveOrdinaryRate = row.ordinaryTax / pool;
+      }
+    }
     if (row.gap) {
       // M6.1 #2: locked = the money exists but can't be touched yet;
       // depleted = there is nothing left to touch

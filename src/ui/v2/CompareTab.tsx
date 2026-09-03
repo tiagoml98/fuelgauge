@@ -25,7 +25,7 @@ import {
   stopContributingAt,
   stressFirstDrawdownYears,
 } from '../../engine/presets';
-import { resolveDrawdownStart } from '../../engine/run';
+import { resolveDrawdownStart, simulateRun } from '../../engine/run';
 import type { GrowthScenario, WithdrawalStrategy } from '../../engine/types';
 import { useCompareGrid, type CompareCell } from '../../state/derived';
 import { useSelectedScenario, useSelectedStrategy, useStore } from '../../state/store';
@@ -142,12 +142,35 @@ export function CompareTab() {
   };
   const equalTakeHome = () => {
     const { traditional, roth, drivers } = equalTakeHomePair(scenario, a);
-    const ratioPct = Math.round(drivers.rateRatio * 1000) / 10;
-    const note = drivers.limitBinds
-      ? 'The deferral limit binds — the clipped dollars spill to taxable, and that (plus drag) is what creates any breakeven age. Without the limit, only the rate comparison would matter.'
-      : drivers.dragActive
-        ? `Limits don't bind here, so the rate ratio (1−t_ret)÷(1−t_now) = ${ratioPct}% decides — taxable drag on spill dollars is the only thing that can bend it.`
-        : `With flat rates and non-binding limits there is no crossover: traditional ends at exactly ${ratioPct}% of Roth's after-tax value at every age. Only the rate comparison matters.`;
+    let note: string;
+    if (a.taxMode === 'bracket') {
+      // M7: no constant ratio in bracket mode — state the COMPUTED average
+      // ordinary rates each path actually pays on its withdrawals (spawned
+      // scenarios × the currently selected strategy)
+      const avgRate = (run: ReturnType<typeof simulateRun>): number | null => {
+        let income = 0;
+        let tax = 0;
+        for (const y of run.years) {
+          income += y.ordinaryIncome ?? 0;
+          tax += y.ordinaryTax ?? 0;
+        }
+        return income > 0.005 ? tax / income : null;
+      };
+      const fmtR = (r: number | null) => (r === null ? '—' : `${(r * 100).toFixed(1)}%`);
+      const tradAvg = avgRate(simulateRun(a, traditional, strategy));
+      const rothAvg = avgRate(simulateRun(a, roth, strategy));
+      note =
+        `Bracket mode — no constant ratio: the traditional path averages ${fmtR(tradAvg)} on its ordinary income vs ${fmtR(rothAvg)} on the Roth path. ` +
+        `The gap between that traditional average and your ${Math.round(a.marginalRateNow * 1000) / 10}% marginal-now is what traditional wins (or loses)` +
+        (drivers.limitBinds ? '; the deferral limit also binds, spilling dollars to taxable.' : '.');
+    } else {
+      const ratioPct = Math.round(drivers.rateRatio * 1000) / 10;
+      note = drivers.limitBinds
+        ? 'The deferral limit binds — the clipped dollars spill to taxable, and that (plus drag) is what creates any breakeven age. Without the limit, only the rate comparison would matter.'
+        : drivers.dragActive
+          ? `Limits don't bind here, so the rate ratio (1−t_ret)÷(1−t_now) = ${ratioPct}% decides — taxable drag on spill dollars is the only thing that can bend it.`
+          : `With flat rates and non-binding limits there is no crossover: traditional ends at exactly ${ratioPct}% of Roth's after-tax value at every age. Only the rate comparison matters.`;
+    }
     spawn(note, [traditional, roth], []);
   };
 

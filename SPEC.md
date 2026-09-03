@@ -90,10 +90,10 @@ Fix take-home cost C. Path A: min(limit, C ÷ (1 − t_now)) pre-tax, remainder 
 
 - 2.0 Bracket mode.
 - 2.1 Conversion ladder: tax from the bracket table, **paid from cash/taxable** (warn if exhausted; paying from the conversion is modeled as penalized before access age); each tranche accessible 5 tax years after conversion; Roth ordering enforced.
-- 2.2 Mega-backdoor schedule.
+- 2.2 Mega-backdoor schedule — specified in §10.2 (M9).
 - 2.3 Bridge visualizer gains ladder sources (cash/taxable carry the first five years, seasoned conversions take over).
 - 2.4 Preset: "convert $X/yr from Y vs don't," breakeven age.
-- 2.5 RMDs from the filer's start age: pre-tax ÷ Uniform Lifetime Table divisor; excess over need → taxable after tax. Cheap and materially important.
+- 2.5 RMDs and the 65+ deduction — specified in §10.3 (M10).
 
 ## 10. Assumptions panel (always visible) + disclaimer
 
@@ -114,6 +114,77 @@ Fix take-home cost C. Path A: min(limit, C ÷ (1 − t_now)) pre-tax, remainder 
 - Conversion tax: bracket mode = marginal slices on the year's pool (it IS ordinary tax and appears in the computed effective rate); simple mode = flat effective + state. Paid from **cash first, then taxable** (the sale pays LTCG on its gain portion); with neither left the tax is **withheld from the conversion itself** — W = shortfall ÷ (1 − 10%) with the 10% early-withdrawal penalty before the owner's ⌈59.5⌉ year, no penalty after — shrinking the tranche and raising an explicit in-app warning.
 - Unlock rule: a tranche's taxable portion is accessible at the **earlier of** five tax years after conversion **or** the year the owner reaches ⌈59.5⌉ — the conversion clock only ever gates the penalty. (The separate 5-year rule on Roth EARNINGS is unchanged.)
 - The bridge visualizer stacks funded years by source — outside money (cash + taxable), seasoned conversions, other sources — per §9-2.3. The preset "Ladder bridge vs outside money" spawns both strategies as experiments; its note states the breakeven age (or its absence), which driver produced it (access vs rates vs the cost of early tax), and the valuation-lens effect: pre-tax is valued at the run's ATE rate, so conversions taxed below/above it appear as an immediate ATE gain/loss per dollar.
+
+### 10.2 Mega-backdoor Roth (M9)
+
+**What it is.** After-tax (non-Roth) 401k contributions, converted to Roth immediately — in-plan to the Roth 401k, or rolled out to the Roth IRA. Only the room left under the 415(c) total limit is available.
+
+**Inputs**
+- Per filer, in the growth scenario: `megaBackdoor: ScheduleRow[]` — $/yr, today's dollars, indexed like other contributions, end-of-year timing.
+- Plan toggles (Assumptions, existing): `afterTaxContributions` (required), and at least one of `inPlanConversion` or `inServiceWithdrawal` (the conversion route). If the required toggles are off, the schedule is dropped with a run note: "plan does not permit after-tax contributions / conversion — mega-backdoor rows ignored."
+- Quick action on the row: "max it" — writes the row to the live 415(c) room for that year (see cap).
+
+**Cap**
+- Room = 415(c) limit − that filer's employee deferrals (traditional + Roth, **excluding** age-based catch-ups, which sit outside 415(c)) − employer match credited that year. Indexed with the limits. Capped and warned inline ("exceeds 415(c) room $X — capped"), same pattern as deferral caps.
+- Order of evaluation within a year: deferrals and match first (already computed), then mega-backdoor into the remaining room.
+
+**Treatment**
+- Each year's amount lands in that filer's Roth IRA as a conversion tranche `{ year, amount, taxablePortion: 0 }` — the same shape as backdoor contributions. Nontaxable conversions are accessible immediately under the existing unlock rule, so these dollars count toward the bridge from day one. `firstFundedYear ??= year`.
+- Assumption (documented): converted immediately, so no pre-conversion earnings are taxed — slight optimism; real plans often convert quarterly.
+- Accumulation only (contributions stop at drawdown start with everything else). No earned-income check, consistent with ASSUMPTIONS M12.
+
+**UI**
+- Advanced → Your details → Contribution detail (per filer): "Mega-backdoor (after-tax 401k → Roth)" schedule editor with a live hint: "415(c) room this year: $X after your deferrals and match." Disabled with the reason when the plan toggles don't permit it.
+- Chart: contributions land in the Roth bucket; marker "mega-backdoor start/stop" as contribution-change events.
+- Rate-arbitrage panel: unchanged (no tax event).
+
+**Tests**
+- Cap arithmetic: limit 72,000, deferral 24,500, match 3,000 → room 44,500; with a 50+ catch-up the room is unchanged (catch-up excluded); requested 60,000 → 44,500 with the inline warning and run note.
+- Toggles: `afterTaxContributions` off → dropped with note, run identical to no-schedule; on with neither conversion route → dropped with note.
+- Tranche shape: `{ year, amount, taxablePortion: 0 }`; accessible in the same year (bridge source shows it as accessible before 59½); `firstFundedYear` set when the Roth IRA was previously empty.
+- Identity: empty schedule ⇒ byte-identical runs; existing tests untouched.
+- Table script: mega-backdoor column in the contributions section; hand-check `examples/mega.json` (one filer, deferral 24,500, 50% match on 6% of a 100k salary → 3,000 match, mega row 60,000 → 44,500 lands in Roth IRA conversions with taxablePortion 0).
+
+**Gate:** tests above green; manifest re-audit; e2e for the editor, the cap warning, the disabled state, and the bridge showing the tranche as accessible; SPEC §10.2 updated to as-built before the report.
+
+### 10.3 Required minimum distributions and the 65+ deduction (M10)
+
+**RMD rules**
+- Start age per filer from birth year: 73 for 1951–1959, 75 for 1960 and later (already in access.ts).
+- Applies to that filer's pre-tax accounts (Traditional 401k, Traditional IRA) combined. Not Roth IRA; not Roth 401k (no RMDs on designated Roth accounts from 2024).
+- RMD in year y = (filer's total pre-tax balance at end of year y−1) ÷ Uniform Lifetime Table divisor at the filer's age in year y. Table lives in `defaults.ts` as `UNIFORM_LIFETIME_TABLE` (ages 72–120), values from IRS Publication 590-B, Table III (2022 revision) — **verify before shipping**; anchor examples: 73 → 26.5, 75 → 24.6, 80 → 20.2, 85 → 16.0, 90 → 12.2.
+- Timing and order within a drawdown year: surplus income → cash; **RMD taken first**, as a forced pre-tax withdrawal at the start of the year, before the withdrawal order runs; then the withdrawal order funds any remaining need; then ladder conversions; then growth. Pre-tax dollars withdrawn by the order also count toward the RMD, so the forced amount is max(0, RMD − pre-tax already drawn for need) — implement as: take the RMD gross first, apply its net to need, let the order fund the rest.
+- Tax: the RMD is ordinary income; in bracket mode it enters the pool (marginal stacking), in simple mode flat effective + state. Tax is paid from the distribution itself (it is a distribution) — net = gross − tax.
+- Net RMD in excess of that year's need moves to invested taxable, adding basis equal to the net amount. The excess is not "spending" and does not count toward lifetime after-tax spending.
+- Conversions cannot satisfy an RMD: ladder rows run after the RMD and after the order, on whatever pre-tax remains.
+- Stops when the filer's pre-tax balance is zero. First-year April-1 deferral, the still-working exception, the spouse-more-than-10-years-younger table, QCDs, and inherited-account rules are not modeled (documented).
+
+**65+ additional standard deduction**
+- Per filer aged ≥ 65 at end of year: single/HoH + $2,050; married filing jointly + $1,650 per qualifying spouse (2026 values, Rev. Proc. 2025-32 — verify). Stored on the bracket table as `additionalDeduction65` per filing status, indexed with the table. Applied in bracket mode only.
+- The temporary senior deduction (2025–2028, $6,000 per person, MAGI phase-out) is **not** modeled — it expires before any realistic drawdown here; documented in ASSUMPTIONS, replacing T17.
+
+**UI**
+- Chart: regime marker "RMDs begin (filer 1)" at N − 0.5; crosshair line "RMD $X (excess $Y to taxable)" in RMD years.
+- Table script: new `=== RMD ===` section — age/year, prior-year pre-tax balance, divisor, RMD gross, tax, net, applied to need, surplus to taxable.
+- Drawdown readout: when RMD surplus occurs, one sentence: "from 75, forced withdrawals exceed your spending by about $X/yr, taxed at N% and pushed into taxable."
+- Rate-arbitrage panel: add "RMD years average: N%" so the post-75 rate is visible next to the conversion-years rate — that gap is the RMD argument for converting.
+- Compare summary: no new metric; existing lifetime spending, terminal ATE, cumulative tax carry the effect.
+- Preset: **"Convert before RMDs vs don't"** — spawns a strategy pair: ladder rows fill-to-top-of-N% (default 12%, editable) from max(drawdown start, 60) through RMD age − 1, versus none. The note states: RMD reduction (first-RMD-year amount, both paths), lifetime tax, terminal ATE, breakeven age from the real crossover or "no breakeven by the horizon," the rate driver (conversion-years rate vs RMD-years rate), and the valuation-lens disclosure from §10.1. The existing ladder-bridge preset may extend rows past 59 when this preset is used; otherwise unchanged.
+
+**Tests**
+- Golden RMD: pre-tax 1,000,000 at end of the age-74 year, filer born 1960+ → age 75 RMD = 1,000,000 ÷ 24.6 = 40,650.41 gross, to the cent; bracket-mode tax on it via the pool; net applied to need.
+- RMD > need: surplus net lands in taxable with basis = net; not counted in lifetime spending.
+- RMD < need: the order funds the remainder; total pre-tax drawn ≥ RMD.
+- Counting rule: when the order would draw pre-tax anyway, the forced portion is only the shortfall to the RMD — no double withdrawal.
+- Conversion interaction: with a ladder row active in an RMD year, RMD is taken first and the conversion converts from the remaining balance; conversions never reduce the RMD in the same year, but a smaller prior-year balance produces a smaller RMD the next year (test the two-year sequence).
+- Stops at zero balance; no RMD on Roth IRA or Roth 401k; per-filer start ages for two filers with different birth years.
+- 65+ deduction: identical income at 64 vs 65 → tax lower at 65 by exactly the deduction × marginal rate; MFJ with both 65+ gets two.
+- Identity: horizon below RMD age ⇒ byte-identical runs; simple mode unaffected by the 65+ deduction; all existing tests untouched.
+- Hand-check `examples/rmd.json`: single filer, born 1961, pre-tax 1,000,000 at 74, spending 30,000, bracket mode, r = 0 — the age-75 row is reproducible by hand from the table section.
+
+**ASSUMPTIONS updates:** T2 (no RMDs) removed; T17 replaced by the senior-deduction omission; new rows for the counting rule, surplus-to-taxable, no QCD/April-1/still-working/spousal-table rules.
+
+**Gate:** tests above green, hand-check walked in the report, preset note text quoted in full, manifest re-audit, SPEC §10.3 updated to as-built before the report. After M10, Phase 2 is complete; the ladder-bridge and RMD presets together answer the project's original question under both feedbacks.
 
 ## 11. Out of scope — do not build
 Monte Carlo or any probabilistic engine; IRMAA; ACA subsidy modeling; 72(t)/SEPP; survivor brackets; estate / 10-year rule; tax-law-change presets; mortgage; NIIT; phase-outs; asset-allocation modeling (the return schedule stands in for it); taxing windfalls.

@@ -128,17 +128,65 @@ export function GrowthChart({
     // Regime changes render at N − 0.5, one-time events at N (M4.5 B.4).
     const singleFiler = a.filers.length === 1;
     const markAges = new Map<number, { labels: string[]; kinds: MarkerEventKind[] }>();
+    // M9 pre-work: one-time events that REPEAT in consecutive years coalesce
+    // into a single span marker ("ladder 44–58 · ≈$80k/yr") — per-year detail
+    // stays in the crosshair readout. Conversions group by kind (amounts vary
+    // with indexing); other one-time kinds (windfalls) group by exact label.
+    const oneTime: Array<{ age: number; kind: MarkerEventKind; label: string; groupKey: string }> = [];
     for (const y of years) {
       for (const e of y.events) {
-        // one-time events (windfall, M8 conversion) mark at N; regime changes at N − 0.5
-        if (e.kind === 'windfall' || e.kind === 'conversion' || REGIME_KINDS.has(e.kind)) {
-          const x = REGIME_KINDS.has(e.kind) ? e.age - 0.5 : e.age;
+        if (e.kind === 'windfall' || e.kind === 'conversion') {
+          const label = shortMarkerLabel(e, singleFiler);
+          oneTime.push({
+            age: e.age,
+            kind: e.kind,
+            label,
+            groupKey: e.kind === 'conversion' ? 'conversion' : `${e.kind}:${label}`,
+          });
+        } else if (REGIME_KINDS.has(e.kind)) {
+          const x = e.age - 0.5;
           const entry = markAges.get(x) ?? { labels: [], kinds: [] };
           entry.labels.push(shortMarkerLabel(e, singleFiler));
           entry.kinds.push(e.kind);
           markAges.set(x, entry);
         }
       }
+    }
+    oneTime.sort((p, q) => (p.groupKey < q.groupKey ? -1 : p.groupKey > q.groupKey ? 1 : p.age - q.age));
+    const pushMark = (x: number, kind: MarkerEventKind, label: string) => {
+      const entry = markAges.get(x) ?? { labels: [], kinds: [] };
+      entry.labels.push(label);
+      entry.kinds.push(kind);
+      markAges.set(x, entry);
+    };
+    for (let i = 0; i < oneTime.length; ) {
+      let j = i;
+      while (
+        j + 1 < oneTime.length &&
+        oneTime[j + 1].groupKey === oneTime[i].groupKey &&
+        oneTime[j + 1].age === oneTime[j].age + 1
+      ) {
+        j++;
+      }
+      const run = oneTime.slice(i, j + 1);
+      if (run.length >= 2) {
+        const from = run[0].age;
+        const to = run[run.length - 1].age;
+        if (run[0].kind === 'conversion') {
+          // ≈ today's-$ average of the converted amounts across the span
+          const reals = run.map((r) => {
+            const y = years.find((yy) => yy.age === r.age);
+            return toReal(y?.ladder?.converted ?? 0, r.age - startAge - 1, a.inflation);
+          });
+          const avg = reals.reduce((s2, v) => s2 + v, 0) / run.length;
+          pushMark(from, 'conversion', `ladder ${from}–${to} · ≈${compact(avg)}/yr`);
+        } else {
+          pushMark(from, run[0].kind, `${run[0].label} ×${run.length} (${from}–${to})`);
+        }
+      } else {
+        pushMark(run[0].age, run[0].kind, run[0].label);
+      }
+      i = j + 1;
     }
     const markLineData = [...markAges.entries()].map(([x, { labels, kinds }]) => {
       const kind = KIND_PRIORITY.find((k) => kinds.includes(k)) ?? kinds[0];

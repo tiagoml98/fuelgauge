@@ -36,6 +36,8 @@ test('hand-check run: LADDER figures rendered — conversion rate column, marker
     (await page.locator('[data-markers]').first().getAttribute('data-markers'))!,
   ) as Array<{ x: number; kind: string }>;
   expect(markers.some((m) => m.x === 65 && m.kind === 'conversion')).toBe(true);
+  // M9 pre-work: 26 consecutive conversion years coalesce into ONE span marker
+  expect(markers.filter((m) => m.kind === 'conversion')).toHaveLength(1);
 });
 
 test('before/after (b): the ladder turns locked years into funded ones as tranches season', async ({ page }) => {

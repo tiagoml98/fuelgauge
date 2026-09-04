@@ -63,13 +63,16 @@ describe('runTiles (M5.5 items 1–2)', () => {
     };
     const depleting = simulateRun(a, state.growthScenarios[0], strategy);
     const spans = runTiles(depleting, a, false).spans;
-    expect(spans.map((s) => s.kind)).toEqual(['funded', 'locked', 'funded', 'depleted']);
+    // M10: the order ignores the 401k, so 65–74 deplete — but RMDs force the
+    // pre-tax out from 75 and those years fund again (a FIFTH span)
+    expect(spans.map((s) => s.kind)).toEqual(['funded', 'locked', 'funded', 'depleted', 'funded']);
     expect(spans[0]).toEqual({ kind: 'funded', from: 45, to: 53 });
     expect(spans[1]).toEqual({ kind: 'locked', from: 54, to: 59 });
     expect(spans[2]).toEqual({ kind: 'funded', from: 60, to: 64 });
-    expect(spans[3]).toEqual({ kind: 'depleted', from: 65, to: 90 });
+    expect(spans[3]).toEqual({ kind: 'depleted', from: 65, to: 74 });
+    expect(spans[4]).toEqual({ kind: 'funded', from: 75, to: 90 });
     expect(formatSpans(spans, a.horizonAge)).toBe(
-      'funded 45–53 · locked out 54–59 · funded 60–64 · depleted 65+',
+      'funded 45–53 · locked out 54–59 · funded 60–64 · depleted 65–74 · funded 75+',
     );
   });
 });

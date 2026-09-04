@@ -114,7 +114,7 @@
   "strategies": [
     {
       "id": "base",
-      "name": "Retire at 65, $60k spending, $20k SS, fill to the 12% bracket \u2014 year 65: pool 17,000 \u00b7 fill 49,500 \u00b7 tax 5,710 from cash \u00b7 unlocks 2027",
+      "name": "Retire at 65, $60k spending, $20k SS, fill to the 12% bracket \u2014 year 65: pool 17,000 \u00b7 fill 51,550 \u00b7 tax 5,800 from cash \u00b7 unlocks 2027",
       "drawdownStartAge": 65,
       "spending": [
         {

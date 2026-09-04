@@ -174,6 +174,32 @@ if (run) {
     }
   }
 
+  // M10: one row per filer per RMD year — the gate's hand-check figures
+  const rmdYears = years.filter((y) => y.rmd !== undefined);
+  if (rmdYears.length > 0) {
+    console.log('\n=== RMD (nominal) ===');
+    console.log(
+      ['age', 'year', 'filer'].map((h) => h.padStart(6)).join('') +
+        ['priorPreTax', 'divisor', 'gross', 'tax', 'net', 'applied', 'toTaxable']
+          .map((c) => c.padStart(WIDTH))
+          .join(''),
+    );
+    for (const y of rmdYears) {
+      const r = y.rmd!;
+      for (const e of r.entries) {
+        // applied/toTaxable are year-level (one need) — shown on the first row
+        const yearLevel = e === r.entries[0] ? [r.appliedToNeed, r.toTaxable] : [0, 0];
+        const cells = [e.priorPreTax, e.divisor, e.gross, e.tax, e.gross - e.tax, ...yearLevel];
+        console.log(
+          String(y.age).padStart(6) +
+            String(y.year).padStart(6) +
+            String(e.filer + 1).padStart(6) +
+            cells.map((v) => v.toFixed(2).padStart(WIDTH)).join(''),
+        );
+      }
+    }
+  }
+
   const drawYears = years.filter((y) => y.withdrawals !== undefined);
   if (drawYears.length > 0) {
     console.log('\n=== WITHDRAWALS (nominal, gross, per account) ===');

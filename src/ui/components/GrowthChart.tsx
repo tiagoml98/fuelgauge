@@ -41,6 +41,7 @@ const REGIME_KINDS: ReadonlySet<MarkerEventKind> = new Set([
   'drawdownStart',
   'accessAge',
   'rollover',
+  'rmdStart',
 ]);
 
 /** SPEC §13 marker taxonomy: solid = drawdown start, dotted = access ages, dashed = the rest. */
@@ -333,6 +334,17 @@ export function GrowthChart({
                 (y.effectiveOrdinaryRate !== undefined
                   ? `<div style="display:flex;justify-content:space-between;gap:16px;color:${chrome.inkSecondary}">
                        <span>effective rate</span><span class="tnum">${(y.effectiveOrdinaryRate * 100).toFixed(1)}%</span></div>`
+                  : '') +
+                // M10: the forced distribution, with any excess routed to taxable
+                (y.rmd !== undefined
+                  ? `<div style="display:flex;justify-content:space-between;gap:16px;color:${chrome.inkSecondary}">
+                       <span>RMD</span><span class="tnum">${fmtMoney(
+                         lens(y.rmd.entries.reduce((s2, e2) => s2 + e2.gross, 0), y.age),
+                       )}${
+                         y.rmd.toTaxable > 0.005
+                           ? ` (excess ${fmtMoney(lens(y.rmd.toTaxable, y.age))} to taxable)`
+                           : ''
+                       }</span></div>`
                   : '') +
                 (y.gap
                   ? `<div style="color:#d03b3b;font-weight:600;margin-top:2px">⚠ GAP — need unmet by ${fmtMoney(lens(y.unmet ?? 0, y.age))}</div>`

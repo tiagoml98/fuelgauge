@@ -1,8 +1,8 @@
 /**
  * M8 conversion ladder: before/after on the motivation examples, bridge
  * sources, the ladder preset with its honest note, the withheld warning, and
- * the hand-check run (examples/ladder.json — pool 17,000 · fill 49,500 ·
- * tax 5,710 from cash · unlock 2027).
+ * the hand-check run (examples/ladder.json — pool 17,000 · fill 51,550
+ * with the 65+ deduction (M10) · tax 5,800 from cash · unlock 2027).
  */
 
 import { simulateRun } from '../src/engine/run';
@@ -24,20 +24,22 @@ test('hand-check run: LADDER figures rendered — conversion rate column, marker
   // and year 65 itself is the exact hand case
   expect(run.years.find((y) => y.age === 65)?.ladder).toMatchObject({
     poolBeforeConversion: expect.closeTo(17_000, 1),
-    converted: expect.closeTo(49_500, 1),
-    tax: expect.closeTo(5_710, 1),
+    converted: expect.closeTo(51_550, 1), // 49,500 + the 2,050 65+ deduction (M10)
+    tax: expect.closeTo(5_800, 1),
     unlockYear: 2027,
   });
   await expect(page.getByText('conversion years (65–', { exact: false })).toBeVisible();
-  // balance-table year 65: the 49,500 tranche shows in the Roth IRA column
-  await expect(page.locator('tr[data-age="65"]')).toContainText('49,500');
+  // balance-table year 65: the 51,550 tranche shows in the Roth IRA column
+  await expect(page.locator('tr[data-age="65"]')).toContainText('51,550');
   // conversion marker in the artifact at N (not N − 0.5)
   const markers = JSON.parse(
     (await page.locator('[data-markers]').first().getAttribute('data-markers'))!,
   ) as Array<{ x: number; kind: string }>;
   expect(markers.some((m) => m.x === 65 && m.kind === 'conversion')).toBe(true);
-  // M9 pre-work: 26 consecutive conversion years coalesce into ONE span marker
-  expect(markers.filter((m) => m.kind === 'conversion')).toHaveLength(1);
+  // M9 pre-work coalescing + M10: RMDs from 75 stack the pool past the 12%
+  // top, so the fills stop — a 65–74 span plus one small year-90 fill
+  expect(markers.filter((m) => m.kind === 'conversion')).toHaveLength(2);
+  expect(markers.some((m) => m.x === 90 && m.kind === 'conversion')).toBe(true);
 });
 
 test('before/after (b): the ladder turns locked years into funded ones as tranches season', async ({ page }) => {

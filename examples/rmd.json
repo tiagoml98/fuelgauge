@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "assumptions": {
+    "filers": [{ "currentAge": 65 }],
+    "filingStatus": "single",
+    "stateTaxRate": 0,
+    "currentYear": 2026,
+    "balances": {
+      "perFiler": [
+        {
+          "trad401k": 1000000,
+          "tradIra": 0,
+          "roth401k": 0,
+          "rothIra": { "basis": 0, "conversions": [], "earnings": 0, "firstFundedYear": null },
+          "hsa": 0
+        }
+      ],
+      "taxable": 0,
+      "cash": 270000
+    },
+    "include": {
+      "trad401k": true,
+      "tradIra": true,
+      "roth401k": true,
+      "rothIra": true,
+      "hsa": true,
+      "taxable": true,
+      "cash": true
+    },
+    "inflation": 0.03,
+    "indexWithInflation": false,
+    "returnSchedule": [{ "fromAge": 0, "toAge": null, "value": 0 }],
+    "returnOverrides": { "cash": [{ "fromAge": 0, "toAge": null, "value": 0 }] },
+    "fees": 0,
+    "dividendYield": 0,
+    "dividendTaxRate": 0.15,
+    "taxMode": "bracket",
+    "marginalRateNow": 0.24,
+    "effectiveRetirementRate": 0.12,
+    "ltcgRate": 0.15,
+    "limits": {
+      "deferral401k": 24500,
+      "catchUp401k50": 8000,
+      "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000,
+      "ira": 7500,
+      "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400,
+      "hsaFamily": 8750,
+      "hsaCatchUp55": 1000,
+      "overall415c": 72000
+    },
+    "hsaCoverage": "selfOnly",
+    "horizonAge": 90,
+    "hsaTreatment": "medical",
+    "safeWithdrawalRate": 0.04,
+    "fireSpendingTarget": 0,
+    "coastTargetAge": 66,
+    "inPlanConversion": false,
+    "inServiceWithdrawal": false,
+    "afterTaxContributions": false
+  },
+  "growthScenarios": [
+    {
+      "id": "base",
+      "name": "RMD hand-check: $1M pre-tax held flat to 75 (born 1961), cash funds 66–74 — every number is exact",
+      "perFiler": [
+        {
+          "salary": [],
+          "contrib401k": [],
+          "split401kRothPct": 0,
+          "contribIra": [],
+          "splitIraRothPct": 1,
+          "backdoor": false,
+          "match": {
+            "mode": "percent",
+            "rate": 0,
+            "capPctOfSalary": 0,
+            "flatAmount": 0,
+            "destination": "trad401k",
+            "vestingPct": 1
+          }
+        }
+      ],
+      "hsaContrib": [],
+      "taxableContrib": [],
+      "cashContrib": [],
+      "windfalls": []
+    }
+  ],
+  "strategies": [
+    {
+      "id": "base",
+      "name": "Retire at 66 on $30k — year 75: RMD 1,000,000 ÷ 24.6 = 40,650.41 · tax 2,452.05 · net 38,198.36 · surplus 8,198.36 → taxable",
+      "drawdownStartAge": 66,
+      "spending": [{ "fromAge": 0, "toAge": null, "value": 30000 }],
+      "oneTimeExpenses": [],
+      "income": [],
+      "order": ["cash", "taxable", "preTax", "rothBasis", "seasonedConversions", "rothEarnings"]
+    }
+  ],
+  "display": { "real": false, "ate": true, "byBuckets": true, "theme": "light", "yearlyTable": true, "activeTab": "drawdown" }
+}

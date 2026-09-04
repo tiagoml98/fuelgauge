@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultAssumptions, defaultGrowthScenario, defaultWithdrawalStrategy } from './defaults';
-import {
+import { convertBeforeRmdsPair,
   equalTakeHomePair,
   reduceContributionTo,
   retireAt,
@@ -111,6 +111,25 @@ describe('the other presets normalize and behave', () => {
     expect(out.drawdownStartAge).toBe(52);
     expect(out.name).toBe('Retire at 52');
     expect(w.drawdownStartAge).toBeUndefined(); // original untouched
+  });
+
+  it('convertBeforeRmdsPair: fill rows span the RESOLVED drawdown start through rmdAge − 1', () => {
+    const a = defaultAssumptions(2026);
+    a.filers = [{ currentAge: 40 }]; // born 1986 → RMDs at 75
+    const w = defaultWithdrawalStrategy(a);
+    const { none, convert, window, rmdAge } = convertBeforeRmdsPair(w, a, 52, 0.12);
+    expect(rmdAge).toBe(75);
+    expect(window).toEqual({ fromAge: 52, toAge: 74 });
+    expect(convert.ladder).toEqual([{ fromAge: 52, toAge: 74, fillToBracketPct: 0.12 }]);
+    expect(none.ladder).toEqual([]);
+    expect(w.ladder).toBeUndefined(); // original untouched
+    // born 1955 → RMD age 73; start at/past it → no window, no fake rows
+    const a73 = defaultAssumptions(2026);
+    a73.filers = [{ currentAge: 71 }];
+    const late = convertBeforeRmdsPair(defaultWithdrawalStrategy(a73), a73, 73, 0.12);
+    expect(late.rmdAge).toBe(73);
+    expect(late.window).toBeNull();
+    expect(late.convert.ladder).toEqual([]);
   });
 
   it('stress preset: base to D−1, then −20/−10/0 single years, then base resumes — normalized', () => {

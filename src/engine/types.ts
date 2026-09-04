@@ -154,6 +154,8 @@ export interface BracketRow {
 /** P2 (M7). Editable, indexed. */
 export interface BracketTable {
   standardDeduction: number;
+  /** M10: added per filer aged ≥ 65 at end of year (bracket mode only). */
+  additionalDeduction65?: number;
   brackets: BracketRow[];
 }
 
@@ -394,6 +396,7 @@ export interface BalanceSnapshot {
 export type MarkerEventKind =
   | 'windfall'
   | 'conversion'
+  | 'rmdStart'
   | 'contributionChange'
   | 'returnChange'
   | 'drawdownStart'
@@ -463,6 +466,16 @@ export interface RunYear {
   ladder?: LadderYear;
   /** M9: total mega-backdoor dollars landed this year (absent when none). */
   megaBackdoor?: number;
+  /**
+   * M10: forced minimum distributions this year. Net applied to need first;
+   * the surplus moves to invested taxable (basis = net) and is NOT spending.
+   */
+  rmd?: {
+    entries: Array<{ filer: number; priorPreTax: number; divisor: number; gross: number; tax: number }>;
+    net: number;
+    appliedToNeed: number;
+    toTaxable: number;
+  };
   /**
    * M8: NET amounts by withdrawal SOURCE (rothBasis vs seasonedConversions vs
    * rothEarnings are distinct here though they share the rothIra account).

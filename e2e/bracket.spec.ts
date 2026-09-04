@@ -2,8 +2,9 @@
  * M7 bracket mode: mode toggle + editor, the computed effective rate in the
  * rate-arbitrage panel / crosshair / balance table, and the bracket-mode
  * preset explanation. The engine numbers are the hand-check case
- * (examples/bracket.json): year 65 — pool 17,000 · deduction 16,100 ·
- * gross-up 45,295.45 · tax 5,295.45 · effective 8.5%.
+ * (examples/bracket.json): year 65 — pool 17,000 · deduction 18,150
+ * (16,100 + 2,050 for 65+, M10) · gross-up 45,015.91 · tax 5,015.91 ·
+ * effective 8.1%. RMDs (M10) kick in at 75 and lift the drawdown average.
  */
 
 import { defaultPersistedState } from '../src/engine/defaults';
@@ -40,14 +41,16 @@ test('tax mode toggle: bracket replaces the effective-rate input with the editor
 test('hand-check run: computed rate in the panel, the table row, and the crosshair (engine equality)', async ({ page }) => {
   await loadState(page, exampleState('bracket'));
   // rate-arbitrage: keyed on the first year WITH pre-tax withdrawals + the average
-  await expect(page.getByTestId('rate-later')).toHaveText('8.5%');
+  await expect(page.getByTestId('rate-later')).toHaveText('8.1%');
   await expect(
     page.getByText('first pre-tax withdrawals (age 65) — computed from your brackets'),
   ).toBeVisible();
-  await expect(page.getByTestId('rate-average')).toHaveText('average over drawdown: 8.5%');
-  // balance table (yearly, nominal): year-65 tax cell = 5,295.45
-  await expect(page.locator('tr[data-age="65"]')).toContainText('5,295');
-  await expect(page.locator('tr[data-age="65"]')).toContainText('45,295');
+  // M10: forced RMD years (75+) pay 12.7% and pull the average above 8.1%
+  await expect(page.getByTestId('rate-average')).toHaveText(
+    'average over drawdown: 9.3% · RMD years average: 12.7%',
+  );
+  // balance table (yearly): year-65 withdrawn cell = the 45,015.91 gross-up
+  await expect(page.locator('tr[data-age="65"]')).toContainText('45,016');
   // crosshair at 65 shows the effective-rate line
   const canvas = page.locator('canvas').first();
   const box = (await canvas.boundingBox())!;
@@ -57,7 +60,7 @@ test('hand-check run: computed rate in the panel, the table row, and the crossha
   await page.mouse.move(x, box.y + box.height / 2);
   await page.mouse.move(x, box.y + box.height / 2 - 4);
   await expect(page.getByText('effective rate').first()).toBeVisible();
-  await expect(page.getByText('8.5%').first()).toBeVisible();
+  await expect(page.getByText('8.1%').first()).toBeVisible();
 });
 
 test('equal-take-home preset explains bracket mode with computed average rates, not a constant ratio', async ({ page }) => {
@@ -86,8 +89,9 @@ test('rate panel with no pre-tax draws: says so, still shows the drawdown averag
   await loadState(page, s);
   await expect(page.getByTestId('rate-later')).toHaveText('—');
   await expect(page.getByText('no year draws pre-tax in this run')).toBeVisible();
-  // income-row ordinary income only: tax 90 on pool 17,000 → 0.5%
-  await expect(page.getByTestId('rate-average')).toHaveText('average over drawdown: 0.5%');
+  // income-row ordinary income only: the 65+ deduction (18,150) now covers
+  // the 17,000 pool entirely — tax 0 → 0% (was 90 → 0.5% pre-M10)
+  await expect(page.getByTestId('rate-average')).toHaveText('average over drawdown: 0%');
 });
 
 test('never-retires warning replaces results when the auto start hits the horizon (M8 pre-work)', async ({ page }) => {

@@ -27,6 +27,7 @@ import {
 import { PRETAX_ACCESS_AGE } from './defaults';
 import { withdrawYear } from './drawdown';
 import { convertYear } from './ladder';
+import { preTaxBalances, takeRmds } from './rmd';
 import { resolveOneTime, resolveSchedule } from './schedule';
 import {
   marginalOrdinaryTax,
@@ -171,7 +172,11 @@ export function simulateRun(
     const tD = D - ctx.startAge;
     const spendD = spending[tD] > 0 ? spending[tD] : a.fireSpendingTarget;
     if (spendD > 0) {
-      const tableD = resolveBracketTable(a, tD);
+      const tableD = resolveBracketTable(
+        a,
+        tD,
+        a.filers.filter((fl) => fl.currentAge + tD >= 65).length,
+      );
       ctx.ateRate =
         marginalOrdinaryTax(incomeSliceAt(tD), spendD, tableD, a.stateTaxRate) / spendD;
     } else {
@@ -209,6 +214,7 @@ export function simulateRun(
   years.push(year0);
 
   const rolledRoth = new Set<number>();
+  const rmdMarked = new Set<number>();
   const rolledTrad = new Set<number>();
   const accessMarked = new Set<string>();
   let firstGapAge: number | null = null;
@@ -225,6 +231,7 @@ export function simulateRun(
     let withdrawals: RunYear['withdrawals'];
     let bySource: RunYear['withdrawalsBySource'];
     let ladderYear: RunYear['ladder'];
+    let rmdYear: RunYear['rmd'];
     let gap = false;
 
     if (age < D) {
@@ -236,6 +243,8 @@ export function simulateRun(
       if (age === D) {
         events.push({ kind: 'drawdownStart', age, label: `drawdown starts at ${D}` });
       }
+      // M10: start-of-year (= end of y−1) pre-tax balances drive this year's RMDs
+      const priorPreTax = preTaxBalances(ctx);
       // Rollovers at the start of the year (gate #6)
       for (let f = 0; f < ctx.filers.length; f++) {
         const s = ctx.filers[f];
@@ -272,7 +281,8 @@ export function simulateRun(
 
       // M7 bracket mode: fresh ordinary-income pool + this year's indexed table
       if (a.taxMode === 'bracket') {
-        ctx.taxCtx = { pool: 0, table: resolveBracketTable(a, t), stateRate: a.stateTaxRate };
+        const filers65 = a.filers.filter((fl) => fl.currentAge + t >= 65).length;
+        ctx.taxCtx = { pool: 0, table: resolveBracketTable(a, t, filers65), stateRate: a.stateTaxRate };
       }
 
       // Need: spending + one-time − net retirement income (gate #9);
@@ -306,15 +316,41 @@ export function simulateRun(
         netNeed = 0;
       }
 
+      // M10: RMDs come FIRST — forced pre-tax draws whose net covers need
+      // before the withdrawal order runs; the surplus moves to invested
+      // taxable (basis = net) and is NOT spending
+      const rmdRes = takeRmds(ctx, t, priorPreTax, events, rmdMarked);
+      taxPaid += rmdRes.taxPaid;
+      let needAfterRmd = netNeed;
+      if (rmdRes.rmd !== null) {
+        const applied = Math.min(netNeed, rmdRes.rmd.net);
+        rmdRes.rmd.appliedToNeed = applied;
+        rmdRes.rmd.toTaxable = rmdRes.rmd.net - applied;
+        needAfterRmd = netNeed - applied;
+        if (rmdRes.rmd.toTaxable > 0.005) {
+          ctx.taxable += rmdRes.rmd.toTaxable;
+          ctx.taxableBasis += rmdRes.rmd.toTaxable;
+        }
+        rmdYear = rmdRes.rmd;
+      }
+
       // income offsets the non-medical share first — the medical slice keeps
       // its tax-free HSA claim (M6.2 #2, noted in ASSUMPTIONS M10)
-      const result = withdrawYear(ctx, t, netNeed, w.order, access, Math.min(medical[t], netNeed));
+      const result = withdrawYear(ctx, t, needAfterRmd, w.order, access, Math.min(medical[t], needAfterRmd));
       taxPaid += result.taxPaid;
       need = netNeed;
       grossNeedOut = grossNeed;
       unmet = result.unmet;
       withdrawals = result.withdrawals;
       bySource = result.bySource;
+      if (rmdYear !== undefined) {
+        for (const acct of ['trad401k', 'tradIra'] as const) {
+          if (rmdRes.grossByAccount[acct] > 0.005) {
+            withdrawals[acct] = (withdrawals[acct] ?? 0) + rmdRes.grossByAccount[acct];
+          }
+        }
+        bySource.preTax = (bySource.preTax ?? 0) + rmdYear.appliedToNeed;
+      }
       gap = result.gap;
       if (gap && firstGapAge === null) firstGapAge = age;
       lifetimeAfterTaxSpending += grossNeed - result.unmet;
@@ -367,6 +403,7 @@ export function simulateRun(
     row.withdrawals = withdrawals;
     row.withdrawalsBySource = bySource;
     row.ladder = ladderYear;
+    row.rmd = rmdYear;
     row.gap = gap;
     Object.assign(row, accessibleAte(ctx, t, access));
     // M7 bracket mode: the year's ordinary income, its bracket tax, and the

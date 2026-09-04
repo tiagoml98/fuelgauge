@@ -147,6 +147,11 @@ function BracketEditor({
         label="Standard deduction"
         control={<MoneyInput value={table.standardDeduction} min={0} onCommit={(v) => patchTable({ ...table, standardDeduction: v })} aria-label="Standard deduction" />}
       />
+      <FieldRow
+        label="Additional deduction 65+"
+        description={a.filingStatus === 'marriedJoint' ? 'per qualifying spouse aged 65+ at end of year' : 'added once the filer is 65 at end of year'}
+        control={<MoneyInput value={table.additionalDeduction65 ?? 0} min={0} onCommit={(v) => patchTable({ ...table, additionalDeduction65: v })} aria-label="Additional deduction 65+" />}
+      />
       {table.brackets.map((b, i) => (
         <div key={i} className="mt-1 flex items-center gap-1.5">
           <PercentInput className="w-20" value={b.rate} onCommit={(v) => patchBracket(i, { rate: v })} aria-label={`Bracket ${i + 1} rate`} />

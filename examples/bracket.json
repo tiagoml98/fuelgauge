@@ -91,7 +91,7 @@
   "strategies": [
     {
       "id": "base",
-      "name": "Retire at 65 on $60k with $20k Social Security — year 65: pool 17,000 · deduction 16,100 · gross-up 45,295.45 · tax 5,295.45",
+      "name": "Retire at 65 on $60k with $20k Social Security — year 65: pool 17,000 · deduction 18,150 (65+) · gross-up 45,015.91 · tax 5,015.91",
       "drawdownStartAge": 65,
       "spending": [{ "fromAge": 0, "toAge": null, "value": 60000 }],
       "oneTimeExpenses": [],

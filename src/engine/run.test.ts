@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultAssumptions, defaultGrowthScenario, defaultWithdrawalStrategy } from './defaults';
+import { DEFAULT_BRACKET_TABLES, defaultAssumptions, defaultGrowthScenario, defaultWithdrawalStrategy } from './defaults';
 import { resolveDrawdownStart, simulateRun } from './run';
 import { toReal } from './schedule';
 import type { Assumptions, GrowthScenario, RunYear, ScheduleRow, WithdrawalStrategy } from './types';
@@ -592,6 +592,12 @@ describe('bracket mode (M7)', () => {
       x.taxMode = 'bracket';
       x.filers = [{ currentAge: 64 }];
       x.balances.perFiler[0].trad401k = 2_000_000;
+      // M7 anchors predate the 65+ deduction (M10) — pinned to zero here so
+      // the verified numbers hold; the deduction has its own tests (rmd.test)
+      x.bracketTables = {
+        single: { ...DEFAULT_BRACKET_TABLES.single, additionalDeduction65: 0 },
+        marriedJoint: { ...DEFAULT_BRACKET_TABLES.marriedJoint, additionalDeduction65: 0 },
+      };
     });
   const handW = () =>
     makeW((x) => {

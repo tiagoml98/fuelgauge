@@ -135,6 +135,22 @@ export function RateArbitragePanel({ a, run, w }: { a: Assumptions; run: RunResu
       {bracket && avg !== null && (
         <p className="text-xs text-neutral-500" data-testid="rate-average">
           average over drawdown: {pct(avg)}
+          {(() => {
+            // M10: the rate the forced years actually pay — the RMD argument
+            // for converting, made visible next to the conversion rate
+            const rmdYears = drawYears.filter((y) => y.rmd !== undefined);
+            const rmdGross = rmdYears.reduce(
+              (t, y) => t + y.rmd!.entries.reduce((t2, e) => t2 + e.gross, 0),
+              0,
+            );
+            const rmdTax = rmdYears.reduce(
+              (t, y) => t + y.rmd!.entries.reduce((t2, e) => t2 + e.tax, 0),
+              0,
+            );
+            return rmdGross > 0.005 ? (
+              <span data-testid="rate-rmd-average"> · RMD years average: {pct(rmdTax / rmdGross)}</span>
+            ) : null;
+          })()}
         </p>
       )}
       <p className="text-xs leading-5 text-neutral-600 dark:text-neutral-400">{verdict}</p>
@@ -255,6 +271,31 @@ export function MilestonesPanel({
         })()}{' '}
         Lifetime after-tax spending {fmtMoney0(tiles.lifetimeAfterTaxSpending)} · cumulative tax{' '}
         {fmtMoney0(tiles.cumulativeTax)} ({tiles.lensLabel}).
+        {(() => {
+          // M10: forced withdrawals beyond spending — nominal, averaged over
+          // the years that actually overflow, with their own average rate
+          const surplusYears = run.years.filter((y) => (y.rmd?.toTaxable ?? 0) > 0.005);
+          if (surplusYears.length === 0) return null;
+          const from = surplusYears[0].age;
+          const avgSurplus =
+            surplusYears.reduce((t, y) => t + y.rmd!.toTaxable, 0) / surplusYears.length;
+          const gross = surplusYears.reduce(
+            (t, y) => t + y.rmd!.entries.reduce((t2, e) => t2 + e.gross, 0),
+            0,
+          );
+          const tax = surplusYears.reduce(
+            (t, y) => t + y.rmd!.entries.reduce((t2, e) => t2 + e.tax, 0),
+            0,
+          );
+          return (
+            <span data-testid="readout-rmd-surplus">
+              {' '}
+              From {from}, forced withdrawals exceed your spending by about{' '}
+              {fmtMoney0(avgSurplus)}/yr (nominal), taxed at {pct(tax / gross)} and pushed into
+              taxable.
+            </span>
+          );
+        })()}
         {a.balances.taxable > 0 && a.balances.taxableBasis === undefined && (
           <> cost basis not entered — taxable withdrawals modeled tax-free.</>
         )}

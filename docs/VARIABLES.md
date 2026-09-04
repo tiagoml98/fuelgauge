@@ -71,6 +71,8 @@ All balances are **nominal** (today's actual dollars). All default to $0, valid 
 | Effective rate on pre-tax withdrawals (labeled "effective") | Assumptions | % | 12% | 0–50% | ate (M2), drawdown gross-up (M3), cash-interest tax in drawdown (M3), simple-mode retirement-income tax (M3, gate #9) |
 | LTCG rate | Assumptions | % | 15% | 0–30% | ate (M2), tax on taxable sale (M3) |
 | Standard deduction + bracket tables per filing status | Assumptions | table rows (upTo = taxable-income top, null = top bracket) | 2026 federal, editable, indexed at the start-of-year exponent; persisted only once edited | rates 0–1, bounds ascending | tax (M7): income-row tax, withdrawal gross-up, drawdown interest, ATE valuation; M8 fill-to-bracket via roomToBracketTop |
+| Additional deduction 65+ (`additionalDeduction65`, M10) | Assumptions (on each bracket table) | $ per qualifying filer 65+ at end of year | 2,050 single / 1,650 per MFJ spouse (2026, Rev. Proc. 2025-32 — verify), editable, indexed with the table | ≥ 0 | bracket mode only: added to the deduction at all three resolveBracketTable call sites (drawdown tax context, run valuation rate, Growth-tab rate) |
+| Uniform Lifetime Table (`UNIFORM_LIFETIME_TABLE`, M10) | defaults.ts (not user-editable) | age → divisor, 72–120; > 120 keeps 2.0 | Pub 590-B Table III (2022 revision) — verify before shipping | — | rmd.ts: RMD = prior-year-end pre-tax ÷ divisor at this year's age, per filer from the 73/75 start age |
 
 ### 1.5 Contribution limits (editable, indexed when toggle on)
 
@@ -173,7 +175,7 @@ Rules every schedule in §1–§3 follows. `src/engine/schedule.ts` implements t
 
 ## 5. Per-run output (not inputs — the engine's contract, SPEC §6)
 
-Per age per run: balance per account and per bucket (gross and ATE), cost basis, Roth sub-balances, total, accessible, locked, cumulative tax paid, gap flag, and marker events (windfalls, contribution changes, drawdown start, access ages). Summary per run: lifetime after-tax spending, terminal ATE at horizon, **years retired = horizon − drawdown start**, **first gap age (reported separately)**, earliest gap-free drawdown age (computed lazily, memoized — up to ~60 runs per cell), bridge funded ✓/✗, cumulative tax (SPEC §3 Compare; gate #E3).
+Per age per run: balance per account and per bucket (gross and ATE), cost basis, Roth sub-balances, total, accessible, locked, cumulative tax paid, gap flag, marker events (windfalls, contribution changes, drawdown start, access ages, RMD start), and — when present — the year's ladder record, mega-backdoor total, and `rmd` record (M10: per-filer entries {filer, priorPreTax, divisor, gross, tax} plus net, appliedToNeed, toTaxable). Summary per run: lifetime after-tax spending, terminal ATE at horizon, **years retired = horizon − drawdown start**, **first gap age (reported separately)**, earliest gap-free drawdown age (computed lazily, memoized — up to ~60 runs per cell), bridge funded ✓/✗, cumulative tax (SPEC §3 Compare; gate #E3).
 
 `AccessMap` (per filer, per source): a **missing key means accessible from the start** (taxable, cash, Roth basis); present keys give the owner's own age at which the source unlocks.
 

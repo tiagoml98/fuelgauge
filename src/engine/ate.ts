@@ -25,7 +25,7 @@ export function growthAteRate(a: Assumptions): number {
   if (a.taxMode !== 'bracket' || a.fireSpendingTarget <= 0) {
     return a.effectiveRetirementRate + a.stateTaxRate;
   }
-  const table = resolveBracketTable(a, 0);
+  const table = resolveBracketTable(a, 0, a.filers.filter((fl) => fl.currentAge >= 65).length);
   return ordinaryTax(a.fireSpendingTarget, table, a.stateTaxRate) / a.fireSpendingTarget;
 }
 

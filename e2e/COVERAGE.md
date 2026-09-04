@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec, `MG` = mega.spec, `M91` = m91.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec, `MG` = mega.spec, `M91` = m91.spec, `RM` = rmd.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -17,7 +17,7 @@ never on hash-stability timing. The suite runs against its own strict-port dev s
 (playwright.config webServer, port 5199, `reuseExistingServer: false`) so an ambient or stale
 server can never be silently reused.
 
-## 1. PersistedState fields (schema v1) — 68/68
+## 1. PersistedState fields (schema v1) — 69/69
 
 | Field | Test |
 |---|---|
@@ -46,6 +46,7 @@ server can never be silently reused.
 | assumptions.dividendYield / dividendTaxRate | PS:maximal |
 | assumptions.taxMode | PS:maximal (bracket) · BR:mode-toggle (live select, switch → state) |
 | assumptions.bracketTables (M7, optional — persisted only once edited) | PS:maximal (edited tables both statuses) · BR:mode-toggle (edit materializes, reset → absent) |
+| assumptions.bracketTables.*.additionalDeduction65 (M10) | PS:maximal (3,000/2,000 non-defaults both statuses) · RM:deduction-editor (round-trip + zeroing changes the year-75 row) |
 | assumptions.marginalRateNow / effectiveRetirementRate / ltcgRate | PS:maximal |
 | assumptions.limits (×10 fields) | PS:maximal (deferral401k 25k) · SE:limit-warning reads deferral401k |
 | assumptions.hsaCoverage | PS:maximal · LT:two-filers (family switch) |
@@ -85,7 +86,7 @@ server can never be silently reused.
 | display.hiddenScenarios / hiddenStrategies (M6.1) | PS:maximal · CM:visibility (hide → deselect → persist through reload) |
 | display.compareSelection / compareBaseline | PS:maximal · CP:hand-case · CM:bulk-delete (cleaned on delete/hide) |
 
-## 2. VARIABLES.md rows — 71/71
+## 2. VARIABLES.md rows — 74/74
 
 Assumptions §1.1–§1.7, Growth §2, Withdrawal §3: every input row above maps 1:1 onto a
 PersistedState field exercised in §1 (`PS:maximal` sets each; the UI control for each is listed
@@ -93,12 +94,12 @@ in §3). **M5 re-audit:** the seven Withdrawal-strategy rows now have live contr
 start (DD:strategy-editor), spending (DD:strategy-editor + DD:swr-flat equality), one-time
 expenses (DD:strategy-editor), retirement income rows incl. the SS tag (DD:strategy-editor),
 withdrawal order (DD:order-reorder), strategy name/id (DD:menu); ladder rows stay P2
-(persist-only via PS:maximal). Derived/rule rows (birth year, access rounding, RMD age, per-run
-output §5, schedule semantics §4) are engine rules covered by the 158-test unit suite: schedule
+(persist-only via PS:maximal). **M10 re-audit:** +3 rows — additionalDeduction65 (RM:deduction-editor + PS:maximal), the Uniform Lifetime Table (not user-editable; rmd unit suite + RM:hand-check), and the RunYear.rmd output record (RM:hand-check engine equality + the `=== RMD ===` table section). Derived/rule rows (birth year, access rounding, RMD age, per-run
+output §5, schedule semantics §4) are engine rules covered by the unit suite: schedule
 semantics → SE (normalize) + unit scheduleOps/schedule tests; §5 output → EQ + DD (run-path
 table/tooltip/bridge equality).
 
-## 3. UI controls — 82/82
+## 3. UI controls — 83/83
 
 | Control | Test |
 |---|---|
@@ -147,6 +148,7 @@ table/tooltip/bridge equality).
 | Advanced: tax fields | PS:maximal |
 | Tax mode select — LIVE (M7): bracket hides the effective-rate input + its sensitivity row | BR:mode-toggle |
 | Bracket editor (M7): standard deduction, per-bracket rate/upTo rows (blank = top), + bracket, delete, reset to current federal, LTCG flat note | BR:mode-toggle (edit → state, reset, 16,100 default rendered) |
+| Bracket editor "Additional deduction 65+" row (M10): 2,050 default rendered, edit round-trips, zeroing shrinks the year-75 surplus on screen | RM:deduction-editor |
 | Rate-arbitrage computed line (M7 bracket, M8 pre-work): first pre-tax-withdrawal year's rate + "average over drawdown"; plain message when no year draws pre-tax | BR:hand-check (8.5% + average) · BR:no-pre-tax (— + 0.5% average) |
 | Never-retires warning (M8 pre-work): Drawdown notice + Compare cell text when the auto start hits the horizon | BR:never-retires (both tabs; funding tile absent) |
 | Equal-take-home guard (M8 pre-work): "Nothing to split" without a 401k schedule, no spawn | CP:equal-take-home (guard + spawn-with-schedule) |
@@ -166,7 +168,7 @@ table/tooltip/bridge equality).
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2 + M8 + M9.1) — 37/37
+## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2 + M8 + M9.1 + M10) — 42/42
 
 `DD` = drawdown.spec. All under the console guard.
 
@@ -208,8 +210,13 @@ table/tooltip/bridge equality).
 | Rate panel conversion column (M8): avg conversion rate over ladder years fills the middle slot | LD:hand-check (engine-derived %) |
 | Bridge source stack (M8, SPEC §9-2.3): outside money / seasoned conversions / other + legend + data-bridge-sources artifact | LD:bridge-sources (conversions take over at the unlock year) |
 | Conversion chart marker at N + crosshair event line | LD:hand-check (marker artifact kind 'conversion') |
+| RMD golden row rendered (M10): withdrawn = forced gross 40,650, surplus 8,198 born in taxable | RM:hand-check (engine equality on examples/rmd.json) |
+| rmdStart regime marker at N − 0.5 (74.5) | RM:hand-check (data-markers artifact) |
+| Crosshair "RMD $X (excess $Y to taxable)" line (M10) | RM:hand-check (hover at 75) |
+| Readout surplus sentence — avg surplus + avg RMD rate (M10) | RM:readout-surplus (engine-derived text) |
+| Rate panel "RMD years average: N%" (M10) | RM:readout-surplus (engine-derived %) |
 
-## 5. Compare-tab controls (M6 re-audit + M6.1 + M7 + M8) — 24/24
+## 5. Compare-tab controls (M6 re-audit + M6.1 + M7 + M8 + M10) — 26/26
 
 `CP` = compare.spec, `CM` = compare-manage.spec. All under the console guard.
 
@@ -225,6 +232,8 @@ table/tooltip/bridge equality).
 | Preset: Traditional vs Roth equal take-home + §8 driver note | CP:equal-take-home + unit presets tests |
 | Preset note, bracket mode (M7): computed average rates per path, no constant-ratio claim | BR:preset-note |
 | Ladder preset (M8, SPEC §9-2.4): amount + from-age inputs, spawns outside/ladder pair as experiments; honest note — breakeven age or its absence, access/rate/cost drivers, valuation-lens disclosure (bracket) or lens-neutral statement (simple) | LD:before-after-b (breakeven 49, spans 11→1 locked) · LD:valuation-lens |
+| Preset "Convert before RMDs vs don't" (M10): fill-% input, spawns none/convert pair as experiments; full note — window used, first-RMD-year gross both paths, lifetime tax, terminal ATE, breakeven or its absence, conversion-vs-RMD rates, valuation lens | RM:preset (all clauses asserted) + convertBeforeRmdsPair unit test |
+| RMD preset guards (M10): simple mode → "need bracket mode" note, no spawn; start ≥ RMD age → no-window note | RM:preset-guard · unit window test |
 | Preset: stop contributing at X (age input) | CP:normalized-presets |
 | Preset: reduce 401k to Y at Z (two inputs) | CP:normalized-presets |
 | Preset: retire at X vs Y (two inputs) | CP:retire-pair |
@@ -242,4 +251,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 301/301 items covered (73 state fields + 72 VARIABLES rows + 94 Growth + 37 Drawdown + 24 Compare + 1 route-removal check). M9.1 re-audit: +7 Drawdown items (rule-of-55 fix, ladder defaults, caveat, no-bridge, fallback, inactive wording, non-negativity invariant). M8 re-audit noted previously; M9 re-audit: +1 VARIABLES row (mega rows), +2 Growth-panel items (mega editor, live plan toggles); megaBackdoor flips from absence-pinned to populated per-filer round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**
+**Manifest: 313/313 items covered (74 state fields + 75 VARIABLES rows + 95 Growth + 42 Drawdown + 26 Compare + 1 route-removal check). M10 re-audit: +12 items — 1 state field (additionalDeduction65 in the maximal round-trip), +3 VARIABLES rows (65+ deduction, Uniform Lifetime Table, RunYear.rmd output record), +1 Growth item (bracket editor "Additional deduction 65+" row, RM:deduction-editor), +5 Drawdown items (golden row, rmdStart marker at 74.5, crosshair RMD line, readout surplus sentence, rate-panel RMD average), +2 Compare items (the RMD preset with its full note; its guards). Engine-side reconciliation: `npm run table -- examples/rmd.json` prints the `=== RMD ===` section whose age-75 row is the golden hand case. M9.1 re-audit: +7 Drawdown items (rule-of-55 fix, ladder defaults, caveat, no-bridge, fallback, inactive wording, non-negativity invariant). M8 re-audit noted previously; M9 re-audit: +1 VARIABLES row (mega rows), +2 Growth-panel items (mega editor, live plan toggles); megaBackdoor flips from absence-pinned to populated per-filer round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

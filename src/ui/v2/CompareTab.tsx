@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Fragment, useMemo, useState } from 'react';
 import { strategyHasSpending } from '../../engine/metrics';
 import {
+  convertBeforeRmdsPair,
   equalTakeHomePair,
   ladderBridgePair,
   reduceContributionTo,
@@ -35,7 +36,7 @@ import { AssumptionsPanel } from '../components/AssumptionsPanel';
 import { RUN_COLORS } from '../theme/colors';
 import { CompareOverlay } from './CompareOverlay';
 import { Lens } from './HeroCard';
-import { AgeInput, fmtMoney0, fmtMoneyM, MoneyInput } from './inputs';
+import { AgeInput, fmtMoney0, fmtMoneyM, MoneyInput, PercentInput } from './inputs';
 import { formatSpans, runTiles, type RunTiles } from './lens';
 
 const cellKey = (c: { scenarioId: string; strategyId: string }) => `${c.scenarioId}:${c.strategyId}`;
@@ -101,6 +102,7 @@ export function CompareTab() {
   const [retireB, setRetireB] = useState(65);
   const [ladderAmount, setLadderAmount] = useState(40_000);
   const [ladderFrom, setLadderFrom] = useState(45);
+  const [rmdFillPct, setRmdFillPct] = useState(0.12);
   const [sortBy, setSortBy] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const lens = (key: 'real' | 'ate') => (v: boolean) =>
     dispatch({ type: 'patchDisplay', patch: { [key]: v } });
@@ -214,6 +216,62 @@ export function CompareTab() {
         ? `Breakeven at ${breakeven} — before it the outside-money path is ahead, after it the ladder is.`
         : 'No breakeven by the horizon: the paths never cross — the cost side outweighs the gains (or vice versa from the start).';
     spawn(`${be} ${access} ${rate} ${valuation}`, [], [outside, ladder]);
+  };
+
+  // M10 (SPEC §10.3): convert before RMDs vs don't — first-RMD-year gross on
+  // both paths, lifetime tax, terminal ATE, breakeven, both rate drivers, and
+  // the §10.1 valuation-lens disclosure; the note states the window used
+  const convertBeforeRmds = () => {
+    if (a.taxMode !== 'bracket') {
+      setPresetNote('Fill-to-bracket conversions need bracket mode — switch “Tax mode” to bracket (Advanced) so the preset can fill to the top of a bracket.');
+      return;
+    }
+    const D = resolveDrawdownStart(a, scenario, strategy);
+    const { none, convert, window, rmdAge } = convertBeforeRmdsPair(strategy, a, D, rmdFillPct);
+    if (window === null) {
+      setPresetNote(`Your drawdown starts at ${D}, at or past filer 1's RMD age (${rmdAge}) — there are no pre-RMD conversion years to use. Nothing spawned.`);
+      return;
+    }
+    const runNone = simulateRun(a, scenario, none);
+    const runConv = simulateRun(a, scenario, convert);
+    const pctf = (v: number) => `${Math.round(v * 1000) / 10}%`;
+    const firstRmd = (r: typeof runNone) => r.years.find((y) => y.rmd !== undefined);
+    const rmdGross = (y: NonNullable<ReturnType<typeof firstRmd>>) =>
+      y.rmd!.entries.reduce((n, e) => n + e.gross, 0);
+    const fN = firstRmd(runNone);
+    const fC = firstRmd(runConv);
+    if (!fN) {
+      spawn(`No RMD years by your horizon (${a.horizonAge}) — filer 1's RMDs would start at ${rmdAge}. The pair still compares bracket smoothing on its own.`, [], [none, convert]);
+      return;
+    }
+    const rmdRate = (r: typeof runNone) => {
+      const ys = r.years.filter((y) => y.rmd !== undefined);
+      const g = ys.reduce((n, y) => n + rmdGross(y), 0);
+      const t = ys.reduce((n, y) => n + y.rmd!.entries.reduce((n2, e) => n2 + e.tax, 0), 0);
+      return g > 0.005 ? t / g : null;
+    };
+    const convYears = runConv.years.filter((y) => y.ladder !== undefined);
+    const totConv = convYears.reduce((n, y) => n + (y.ladder?.converted ?? 0), 0);
+    const convRate = totConv > 0.005 ? convYears.reduce((n, y) => n + (y.ladder?.tax ?? 0), 0) / totConv : null;
+    const noneRmdRate = rmdRate(runNone);
+    const breakeven = firstCrossover(runNone, runConv, a, d.real);
+    const firstLine = fC
+      ? `First RMD year (${fN.age}): ${fmtMoney0(rmdGross(fN))} forced without converting vs ${fmtMoney0(rmdGross(fC))} after — conversions in ${window.fromAge}–${window.toAge} (the window used: your resolved drawdown start through the year before RMDs) shrink the pre-tax balance RMDs are computed on.`
+      : `Converting in ${window.fromAge}–${window.toAge} (the window used: your resolved drawdown start through the year before RMDs) empties pre-tax entirely — the no-convert path is forced to take ${fmtMoney0(rmdGross(fN))} at ${fN.age}; the convert path has no RMD years at all.`;
+    const totals = `Lifetime tax ${fmtMoney0(runNone.summary.cumulativeTax)} without vs ${fmtMoney0(runConv.summary.cumulativeTax)} with; terminal ATE ${fmtMoneyM(runNone.summary.terminalAte)} vs ${fmtMoneyM(runConv.summary.terminalAte)}.`;
+    const be =
+      breakeven !== null
+        ? `Breakeven at ${breakeven} — before it the no-convert path is ahead, after it converting is.`
+        : 'No breakeven by the horizon: the paths never cross.';
+    const rates =
+      convRate !== null && noneRmdRate !== null
+        ? `The driver is the rate gap: conversions pay ${pctf(convRate)} in the bridge years vs ${pctf(noneRmdRate)} the forced RMD years average without them.`
+        : 'No rate comparison available (one side pays no ordinary tax).';
+    const valuation =
+      convRate !== null && Math.abs(runConv.ateRate - convRate) >= 0.0005
+        ? ` Note the lens: pre-tax is valued at ${pctf(runConv.ateRate)}; conversions taxed at ${pctf(convRate)} appear as an immediate ATE ${runConv.ateRate > convRate ? 'gain' : 'loss'} of ${Math.abs(Math.round((runConv.ateRate - convRate) * 100))}¢ per dollar converted — part of any crossover reflects this valuation rule, not only economics.`
+        : ' Pre-tax is valued at the same rate the conversions pay, so the lens is neutral here.';
+    spawn(`${firstLine} ${totals} ${be} ${rates}${valuation}`, [], [none, convert]);
   };
 
   const setHiddenScenarios = (ids: string[]) => dispatch({ type: 'setHidden', scenarios: ids });
@@ -426,6 +484,13 @@ export function CompareTab() {
             <MoneyInput className="w-24" value={ladderAmount} min={0} onCommit={setLadderAmount} aria-label="Ladder preset amount" />
             <span className="text-neutral-400">/yr from</span>
             <AgeInput className="w-16" value={ladderFrom} onCommit={setLadderFrom} aria-label="Ladder preset from age" />
+          </span>
+          <span className="flex items-center gap-1">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={convertBeforeRmds}>
+              Convert before RMDs vs don’t
+            </Button>
+            <span className="text-neutral-400">fill to top of</span>
+            <PercentInput className="w-16" value={rmdFillPct} onCommit={setRmdFillPct} aria-label="RMD preset fill bracket" />
           </span>
         </div>
         {presetNote && (

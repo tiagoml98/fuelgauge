@@ -71,6 +71,7 @@ function maximalState(): PersistedState {
     bracketTables: {
       single: {
         standardDeduction: 17_000,
+        additionalDeduction65: 3_000,
         brackets: [
           { upTo: 15_000, rate: 0.1 },
           { upTo: null, rate: 0.3 },
@@ -78,6 +79,7 @@ function maximalState(): PersistedState {
       },
       marriedJoint: {
         standardDeduction: 32_200,
+        additionalDeduction65: 2_000,
         brackets: [{ upTo: null, rate: 0.25 }],
       },
     },

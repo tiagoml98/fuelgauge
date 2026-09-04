@@ -24,14 +24,25 @@ export const SS_TAXABLE_SHARE = 0.85;
  * Rates are never indexed. Bracket rows are ordered; each upTo bounds
  * TAXABLE income (after the deduction); null = top bracket.
  */
-export function resolveBracketTable(a: Assumptions, yearsFromNow: number): BracketTable {
+export function resolveBracketTable(
+  a: Assumptions,
+  yearsFromNow: number,
+  /** M10: filers aged ≥ 65 at end of year — each adds additionalDeduction65. */
+  filers65 = 0,
+): BracketTable {
   const base = a.bracketTables?.[a.filingStatus] ?? DEFAULT_BRACKET_TABLES[a.filingStatus];
+  const deduction = base.standardDeduction + filers65 * (base.additionalDeduction65 ?? 0);
   if (!a.indexWithInflation || a.inflation === 0 || yearsFromNow <= 0) {
-    return { standardDeduction: base.standardDeduction, brackets: base.brackets.map((b) => ({ ...b })) };
+    return {
+      standardDeduction: deduction,
+      additionalDeduction65: base.additionalDeduction65,
+      brackets: base.brackets.map((b) => ({ ...b })),
+    };
   }
   const factor = Math.pow(1 + a.inflation, timingExponent(yearsFromNow, 'startOfYear'));
   return {
-    standardDeduction: base.standardDeduction * factor,
+    standardDeduction: deduction * factor,
+    additionalDeduction65: base.additionalDeduction65,
     brackets: base.brackets.map((b) => ({ upTo: b.upTo === null ? null : b.upTo * factor, rate: b.rate })),
   };
 }

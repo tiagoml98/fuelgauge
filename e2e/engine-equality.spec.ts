@@ -78,7 +78,7 @@ test('hero metrics match the engine ($1M age on spotcheck)', async ({ page }) =>
 });
 
 test('y-axis floor: no plotted series dips below $0 on ANY example, buckets and accounts (M9.1 #7)', async ({ page }) => {
-  for (const name of ['golden', 'spotcheck', 'drawdown', 'bracket', 'ladder', 'mega', 'fuelgauge'] as const) {
+  for (const name of ['golden', 'spotcheck', 'drawdown', 'bracket', 'ladder', 'mega', 'rmd', 'fuelgauge'] as const) {
     const s = exampleState(name);
     s.display = { ...s.display, activeTab: 'drawdown', theme: 'light' };
     for (const byBuckets of [true, false]) {

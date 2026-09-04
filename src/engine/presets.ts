@@ -6,6 +6,7 @@
  * UI notes it rather than faking it.
  */
 
+import { rmdStartAge } from './access';
 import { resolveSchedule } from './schedule';
 import { rowsFromValues, reduceTo, sliceFrom, stopAt } from './scheduleOps';
 import type { Assumptions, GrowthScenario, ScheduleRow, WithdrawalStrategy } from './types';
@@ -149,6 +150,42 @@ export function stressFirstDrawdownYears(
  * converting $X/yr (today's $) from age Y through 59 (past 59 access is no
  * longer the motive; the RMD-motivated variant arrives in M10).
  */
+/**
+ * M10 (SPEC §10.3): "Convert before RMDs vs don't". Two strategy clones —
+ * no ladder, vs fill-to-top-of-N% rows from the RESOLVED drawdown start
+ * through the year before filer 1's RMDs begin (the bridge years are the
+ * cheapest conversion years — low pool, no forced income yet). The caller
+ * resolves the drawdown start (it needs the scenario) and passes it in.
+ * Returns the window so the note can state it; empty window (start ≥ RMD
+ * age) yields identical paths and the caller says so instead of faking it.
+ */
+export function convertBeforeRmdsPair(
+  w: WithdrawalStrategy,
+  a: Assumptions,
+  resolvedStart: number,
+  fillPct = 0.12,
+): {
+  none: WithdrawalStrategy;
+  convert: WithdrawalStrategy;
+  window: { fromAge: number; toAge: number } | null;
+  rmdAge: number;
+} {
+  const rmdAge = rmdStartAge(a.currentYear - a.filers[0].currentAge);
+  const window =
+    resolvedStart <= rmdAge - 1 ? { fromAge: resolvedStart, toAge: rmdAge - 1 } : null;
+  const none: WithdrawalStrategy = {
+    ...structuredClone(w),
+    name: "Don't convert (RMDs as they come)",
+    ladder: [],
+  };
+  const convert: WithdrawalStrategy = {
+    ...structuredClone(w),
+    name: `Convert to top of ${Math.round(fillPct * 1000) / 10}% before RMDs`,
+    ladder: window === null ? [] : [{ fromAge: window.fromAge, toAge: window.toAge, fillToBracketPct: fillPct }],
+  };
+  return { none, convert, window, rmdAge };
+}
+
 export function ladderBridgePair(
   w: WithdrawalStrategy,
   amount: number,

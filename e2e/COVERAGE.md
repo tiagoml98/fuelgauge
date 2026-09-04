@@ -6,7 +6,7 @@ every UI milestone as controls are added (next audit: M5 Drawdown tab).
 
 Conventions. `NI` = numeric-inputs.spec, `SE` = schedule-editors.spec, `LN` = lenses.spec,
 `LT` = layout-tabs.spec, `PS` = persistence.spec, `EQ` = engine-equality.spec, `PO` =
-polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec, `MG` = mega.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
+polish.spec, `DD` = drawdown.spec, `CP` = compare.spec, `CM` = compare-manage.spec, `BS` = basis.spec, `BR` = bracket.spec, `LD` = ladder.spec, `MG` = mega.spec, `M91` = m91.spec. Every test runs under the auto console guard (fixtures.ts): **zero console
 errors/warnings after every interaction** or the test fails. `PS:maximal` = the maximal-state
 round-trip, which sets every field to a non-default value and deep-equals it through hash →
 reload → export → import. Per the CLAUDE.md UI-test rule, interaction tests assert
@@ -166,7 +166,7 @@ table/tooltip/bridge equality).
 | Assumptions panel (?raw render + show all) | LT:empty-state (disclaimer) — panel content is doc-sourced |
 | Error boundary + last-good banner | NI:invalid-schedule-row |
 
-## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2 + M8) — 30/30
+## 4. Drawdown-tab controls (M5 re-audit + M6.1 + M6.2 + M8 + M9.1) — 37/37
 
 `DD` = drawdown.spec. All under the console guard.
 
@@ -197,7 +197,13 @@ table/tooltip/bridge equality).
 | Chart structure: buckets = 4 aggregate series (structurally seamless), accounts = per-account with year-step (M6.1 #1) | DD:bucket-series (data-series artifact both modes) |
 | Medical slice editor "Medical spending (part of total)" (renamed M6.3) — HSA-first tax-free at any age (M6.2 #2) | DD:medical-slice (entry → rendered table row, engine equality, no gap) |
 | HSA last resort — funded past pot-death, depleted only at HSA zero (M6.2 #2) | DD:hsa-last-resort (spans text, taxed draw in table, gap only at 89) + engine shape tests |
-| Conversion-ladder rows editor (M8): type select $/fill, from/to, add/delete, simple-mode fill hint | LD:editor |
+| Conversion-ladder rows editor (M8; M9.1 #2 defaults): from = resolved drawdown start, fill-to-12% default in bracket mode, inline from > to flag | LD:editor · M91:defaults |
+| Ladder can't-help caveat (M9.1 #3): unlocks-when-open-anyway + withheld-penalty statements in rate panel and readout | M91:caveat |
+| No-bridge state (M9.1 #4): "no bridge needed" copy, locked-until suppressed, empty bridge window when nothing opens after D | M91:no-bridge |
+| Milestones strategy-spending fallback with label (M9.1 #5) | M91:fallback |
+| Inactive-ladder reason wording (M9.1 #6) | M91:inactive |
+| Rule-of-55 access fix + order-guarded bridge end (M9.1 #1) | M91:rule-of-55 (bridge 56–60, locked until 60) + access unit tests |
+| Non-negativity invariant + $0 y-axis floor (M9.1 #7) | invariants.test (all examples ×  all runs) · EQ:y-min sweep (7 examples × 2 modes) · fuelgauge.json repro pinned |
 | Ladder withheld warning (M8): amber notice with withheld total + 10% penalty when cash/taxable are exhausted | LD:before-after-a + engine waterfall tests |
 | Rate panel conversion column (M8): avg conversion rate over ladder years fills the middle slot | LD:hand-check (engine-derived %) |
 | Bridge source stack (M8, SPEC §9-2.3): outside money / seasoned conversions / other + legend + data-bridge-sources artifact | LD:bridge-sources (conversions take over at the unlock year) |
@@ -236,4 +242,4 @@ table/tooltip/bridge equality).
 
 Display fields `compareSelection` / `compareBaseline` / `hiddenScenarios` / `hiddenStrategies`: §1 rows (PS:maximal + CP/CM set-and-read-back).
 
-**Manifest: 294/294 items covered (73 state fields + 72 VARIABLES rows + 94 Growth + 30 Drawdown + 24 Compare + 1 route-removal check). M8 re-audit noted previously; M9 re-audit: +1 VARIABLES row (mega rows), +2 Growth-panel items (mega editor, live plan toggles); megaBackdoor flips from absence-pinned to populated per-filer round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**
+**Manifest: 301/301 items covered (73 state fields + 72 VARIABLES rows + 94 Growth + 37 Drawdown + 24 Compare + 1 route-removal check). M9.1 re-audit: +7 Drawdown items (rule-of-55 fix, ladder defaults, caveat, no-bridge, fallback, inactive wording, non-negativity invariant). M8 re-audit noted previously; M9 re-audit: +1 VARIABLES row (mega rows), +2 Growth-panel items (mega editor, live plan toggles); megaBackdoor flips from absence-pinned to populated per-filer round-trip. M7 re-audit: +1 state field (bracketTables), +4 Growth-panel items (live tax-mode select, bracket editor, rate-arbitrage computed line, crosshair effective-rate line), +1 Compare item (bracket preset note) over the M6.3 count of 277. Engine-side reconciliation: `npm run table -- examples/bracket.json` prints the hand-check year with ordInc/effRate columns.**

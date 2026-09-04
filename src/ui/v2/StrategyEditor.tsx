@@ -356,6 +356,9 @@ export function StrategyEditor({
                 invalidMessage="whole age"
                 aria-label={`Ladder ${i + 1} to age`}
               />
+              {row.toAge !== null && row.fromAge > row.toAge && (
+                <span className="text-amber-700 dark:text-amber-400">from &gt; to — this row converts nothing</span>
+              )}
               {row.fillToBracketPct !== undefined && a.taxMode !== 'bracket' && (
                 <span className="text-amber-700 dark:text-amber-400">fill-to-bracket needs bracket mode — this row is skipped</span>
               )}
@@ -366,7 +369,18 @@ export function StrategyEditor({
           variant="outline"
           size="sm"
           className="mt-1.5 h-7 text-xs"
-          onClick={() => patch({ ladder: [...(w.ladder ?? []), { fromAge: autoStart, toAge: 59, amount: 20_000 }] })}
+          onClick={() => {
+            // M9.1 #2: default from = the RESOLVED drawdown start (never an
+            // inert 90/59 pair); fill-to-12% by default in bracket mode
+            const from = w.drawdownStartAge ?? autoStart;
+            const base = { fromAge: from, toAge: 59 as number | null };
+            patch({
+              ladder: [
+                ...(w.ladder ?? []),
+                a.taxMode === 'bracket' ? { ...base, fillToBracketPct: 0.12 } : { ...base, amount: 20_000 },
+              ],
+            });
+          }}
         >
           + conversion row
         </Button>

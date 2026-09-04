@@ -76,3 +76,18 @@ test('hero metrics match the engine ($1M age on spotcheck)', async ({ page }) =>
   const millionAge = firstAgeAtValue(years, 1_000_000, state.assumptions.inflation);
   await expect(page.getByText(`age ${millionAge}`, { exact: false })).toBeVisible();
 });
+
+test('y-axis floor: no plotted series dips below $0 on ANY example, buckets and accounts (M9.1 #7)', async ({ page }) => {
+  for (const name of ['golden', 'spotcheck', 'drawdown', 'bracket', 'ladder', 'mega', 'fuelgauge'] as const) {
+    const s = exampleState(name);
+    s.display = { ...s.display, activeTab: 'drawdown', theme: 'light' };
+    for (const byBuckets of [true, false]) {
+      s.display.byBuckets = byBuckets;
+      await loadState(page, s);
+      const chart = page.locator('[data-y-min]').first();
+      if ((await chart.count()) === 0) continue; // no-spending states render no run chart
+      const yMin = Number(await chart.getAttribute('data-y-min'));
+      expect(yMin, `${name} byBuckets=${byBuckets}`).toBeGreaterThanOrEqual(0);
+    }
+  }
+});

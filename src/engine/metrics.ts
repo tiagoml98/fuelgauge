@@ -109,9 +109,11 @@ export function coastFireAge(a: Assumptions, g: GrowthScenario): number | null {
  */
 export function analyzeBridge(run: RunResult, a: Assumptions, w: WithdrawalStrategy): BridgeReport {
   const f1 = a.filers[0].currentAge;
-  const latestAccess = latestAccessAgeF1(run, a);
+  const latestAccess = latestAccessAgeF1(run, a, w.order);
 
-  const years = run.years
+  // M9.1 #4: drawdown start at/after every in-order access age ⇒ NO bridge —
+  // a degenerate one-year window is not a bridge problem
+  const years = (latestAccess <= run.drawdownStartAge ? [] : run.years)
     .filter((y) => y.age >= run.drawdownStartAge && y.age <= latestAccess && y.need !== undefined)
     .map((y) => ({
       age: y.age,

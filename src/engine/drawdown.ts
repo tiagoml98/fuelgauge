@@ -286,8 +286,40 @@ export function withdrawYear(
     }
   }
 
+  snapDust(ctx);
   const unmet = Math.max(0, remaining);
   return { withdrawals, bySource, taxPaid, unmet, gap: unmet > EPS };
+}
+
+/**
+ * M9.1 #7: pro-rata basis reductions leave ±1e-11 dust when a balance drains
+ * to exactly zero; afterTaxOfGain then produces a negative ATE, which ECharts
+ * amplifies into a below-$0 axis and a stack seam. Snap sub-cent dust to
+ * exact zeros and clamp every basis into [0, balance] — at the SOURCE, no
+ * renderer workaround.
+ */
+export function snapDust(ctx: SimContext): void {
+  const z = (v: number) => (Math.abs(v) < 0.005 ? 0 : v);
+  ctx.taxable = z(ctx.taxable);
+  ctx.cash = z(ctx.cash);
+  ctx.taxableBasis = Math.min(Math.max(0, z(ctx.taxableBasis)), ctx.taxable);
+  for (const s of ctx.filers) {
+    s.trad401k = z(s.trad401k);
+    s.tradIra = z(s.tradIra);
+    s.roth401k = z(s.roth401k);
+    s.hsa = z(s.hsa);
+    s.tradIraBasis = Math.min(Math.max(0, z(s.tradIraBasis)), s.tradIra);
+    s.roth401kBasis = Math.min(Math.max(0, z(s.roth401kBasis)), s.roth401k);
+    s.matchTrad = Math.min(Math.max(0, z(s.matchTrad)), s.trad401k);
+    s.matchRoth = Math.min(Math.max(0, z(s.matchRoth)), s.roth401k);
+    s.matchRothBasis = Math.max(0, z(s.matchRothBasis));
+    s.rothIra.basis = Math.max(0, z(s.rothIra.basis));
+    s.rothIra.earnings = Math.max(0, z(s.rothIra.earnings));
+    for (const c of s.rothIra.conversions) {
+      c.amount = Math.max(0, z(c.amount));
+      c.taxablePortion = Math.min(Math.max(0, z(c.taxablePortion)), c.amount);
+    }
+  }
 }
 
 /** Total conversion principal still sitting in a filer's Roth IRA. */

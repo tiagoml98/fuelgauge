@@ -79,6 +79,26 @@ describe('rothEarningsOpen', () => {
   });
 });
 
+describe('rule of 55 never DELAYS access (M9.1 #1)', () => {
+  const withSeparation = (sep: number | null) => {
+    const a = defaultAssumptions(2026);
+    a.filers = [{ currentAge: 40 }];
+    const g = defaultGrowthScenario(1);
+    if (sep !== null) g.perFiler[0].salary = [{ fromAge: 41, toAge: sep, value: 100_000 }];
+    return computeAccessAges(a, g)[0];
+  };
+
+  it('separation 90 (salary to the horizon) → the 401k still opens at 60, not 90', () => {
+    expect(withSeparation(90).trad401k).toBe(59.5); // ceil → opens the year they turn 60
+  });
+  it('separation 56 → rule of 55 opens the 401k at 56', () => {
+    expect(withSeparation(56).trad401k).toBe(56);
+  });
+  it('separation 50 (before 55) → the normal 59½ rule', () => {
+    expect(withSeparation(50).trad401k).toBe(59.5);
+  });
+});
+
 describe('accessibleConversionAmount (gate #4, M8 unlock rule)', () => {
   it('M8: the taxable portion opens at the EARLIER of +5 tax years or the ceil(59.5) year', () => {
     const c = { year: 2026, amount: 50_000, taxablePortion: 50_000 };

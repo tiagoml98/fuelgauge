@@ -21,6 +21,7 @@
  */
 
 import { conversionUnlockYear } from './access';
+import { snapDust } from './drawdown';
 import { noteOnce, type SimContext } from './accumulate';
 import { EARLY_WITHDRAWAL_PENALTY, PRETAX_ACCESS_AGE } from './defaults';
 import { timingExponent } from './schedule';
@@ -178,5 +179,6 @@ export function convertYear(
     age,
     label: `convert ${Math.round(converted).toLocaleString('en-US')}`,
   });
+  snapDust(ctx);
   return { ladder, taxPaid };
 }

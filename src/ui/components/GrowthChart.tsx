@@ -94,7 +94,7 @@ export function GrowthChart({
     };
   }, []);
 
-  const { option, markerArtifact, seriesNames } = useMemo(() => {
+  const { option, markerArtifact, seriesNames, yMin } = useMemo(() => {
     const seriesDefs = display.byBuckets
       ? BUCKET_ORDER.map((b) => ({
           name: BUCKET_LABELS[b],
@@ -374,7 +374,10 @@ export function GrowthChart({
           : {}),
       })),
     };
-    return { option, markerArtifact, seriesNames: seriesDefs.map((s) => s.name) };
+    // M9.1 #7: the smallest value across every plotted series — the e2e
+    // asserts it is ≥ 0 on every example so the y-axis floor stays at $0
+    const yMin = Math.min(0, ...seriesDefs.flatMap((s) => s.values.map(([, v]) => v as number)));
+    return { option, markerArtifact, seriesNames: seriesDefs.map((s) => s.name), yMin };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [years, a, display, mode, variant]);
 
@@ -383,6 +386,7 @@ export function GrowthChart({
       ref={wrapRef}
       data-markers={JSON.stringify(markerArtifact)}
       data-series={JSON.stringify(seriesNames)}
+      data-y-min={String(yMin)}
     >
       <ReactECharts ref={chartRef} option={option} style={{ height: 420 }} notMerge autoResize={false} theme={undefined} />
     </div>

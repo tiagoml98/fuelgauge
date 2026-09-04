@@ -6,14 +6,57 @@
 import { Card } from '@/components/ui/card';
 import { latestAccessAgeF1 } from '../../engine/run';
 import { timingExponent, toReal } from '../../engine/schedule';
-import type { Assumptions, BridgeReport, RunResult } from '../../engine/types';
+import type { Assumptions, BridgeReport, RunResult, WithdrawalStrategy } from '../../engine/types';
 import type { DrawdownMetrics } from '../../state/derived';
 import { fmtMoney0 } from './inputs';
 import { formatSpans, type RunTiles } from './lens';
 
 const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 
-export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult | null }) {
+/**
+ * M9.1 #3/#6: why a ladder is inactive, and when an active one cannot help —
+ * every tranche unlocking at/after the year everything opens anyway, or the
+ * ladder paying its own tax with the penalty.
+ */
+export function ladderDiagnosis(
+  run: RunResult | null,
+  a: Assumptions,
+  w: WithdrawalStrategy,
+): { inactiveReason: string | null; caveat: string | null } {
+  const rows = w.ladder ?? [];
+  const activeYears = run?.years.filter((y) => y.ladder !== undefined) ?? [];
+  let inactiveReason: string | null = null;
+  if (rows.length > 0 && activeYears.length === 0 && run) {
+    if (rows.every((r) => r.toAge !== null && r.fromAge > r.toAge)) inactiveReason = 'from > to';
+    else if (rows.every((r) => r.fillToBracketPct !== undefined) && a.taxMode !== 'bracket')
+      inactiveReason = 'fill rows need bracket mode';
+    else inactiveReason = 'outside the drawdown window';
+  }
+  let caveat: string | null = null;
+  if (run && activeYears.length > 0) {
+    const openAge = latestAccessAgeF1(run, a, w.order);
+    const openYear = a.currentYear + (openAge - a.filers[0].currentAge);
+    const minUnlock = Math.min(...activeYears.map((y) => y.ladder!.unlockYear));
+    const unlockAge = a.filers[0].currentAge + (minUnlock - a.currentYear);
+    const totConv = activeYears.reduce((n, y) => n + (y.ladder?.converted ?? 0), 0);
+    const convRate =
+      totConv > 0.005 ? activeYears.reduce((n, y) => n + (y.ladder?.tax ?? 0), 0) / totConv : 0;
+    const laterRate = run.ateRate;
+    if (minUnlock >= openYear) {
+      caveat =
+        `this ladder unlocks at ${unlockAge}, when your pre-tax opens anyway — it can't shorten the bridge` +
+        (convRate > laterRate + 0.0005
+          ? `; conversions at ${pct(convRate)} cost more than withdrawals at ${pct(laterRate)}`
+          : '');
+    } else if (activeYears.some((y) => (y.ladder?.penalty ?? 0) > 0.005)) {
+      caveat =
+        'the ladder is paying its own tax with the 10% penalty — nothing left in cash/taxable; it may cost more than it unlocks';
+    }
+  }
+  return { inactiveReason, caveat };
+}
+
+export function RateArbitragePanel({ a, run, w }: { a: Assumptions; run: RunResult | null; w: WithdrawalStrategy }) {
   const now = a.marginalRateNow;
   // M7 (+ M8 pre-work): in bracket mode the effective rate is an OUTPUT.
   // Early-retirement runs often draw no pre-tax for years — key on the FIRST
@@ -59,10 +102,13 @@ export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult 
           <div className="text-[11px] text-neutral-500">marginal today</div>
         </div>
         {(() => {
-          // M8: the ladder's average conversion rate fills the middle column
+          // M8: the ladder's average conversion rate fills the middle column;
+          // M9.1 #6: rows that exist but never fire get the REASON, not
+          // "no ladder rows"
           const conv = (run?.years ?? []).filter((y) => y.ladder !== undefined);
           const totConverted = conv.reduce((s, y) => s + (y.ladder?.converted ?? 0), 0);
           const totTax = conv.reduce((s, y) => s + (y.ladder?.tax ?? 0), 0);
+          const { inactiveReason } = ladderDiagnosis(run, a, w);
           return totConverted > 0.005 ? (
             <div>
               <div className="tnum text-xl font-semibold" data-testid="rate-conversion">{pct(totTax / totConverted)}</div>
@@ -73,7 +119,9 @@ export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult 
           ) : (
             <div className="opacity-50">
               <div className="text-xl font-semibold">—</div>
-              <div className="text-[11px] text-neutral-500">conversion years (no ladder rows)</div>
+              <div className="text-[11px] text-neutral-500" data-testid="rate-ladder-state">
+                {inactiveReason ? `ladder rows inactive — ${inactiveReason}` : 'conversion years (no ladder rows)'}
+              </div>
             </div>
           );
         })()}
@@ -90,6 +138,14 @@ export function RateArbitragePanel({ a, run }: { a: Assumptions; run: RunResult 
         </p>
       )}
       <p className="text-xs leading-5 text-neutral-600 dark:text-neutral-400">{verdict}</p>
+      {(() => {
+        const { caveat } = ladderDiagnosis(run, a, w);
+        return caveat ? (
+          <p className="text-xs leading-5 text-amber-800 dark:text-amber-300" data-testid="ladder-caveat">
+            {caveat}
+          </p>
+        ) : null;
+      })()}
     </Card>
   );
 }
@@ -109,6 +165,7 @@ export function MilestonesPanel({
   metrics,
   coastAge,
   a,
+  w,
   tiles,
   real,
 }: {
@@ -117,12 +174,13 @@ export function MilestonesPanel({
   metrics: DrawdownMetrics;
   coastAge: number | null;
   a: Assumptions;
+  w: WithdrawalStrategy;
   tiles: RunTiles;
   real: boolean;
 }) {
   const s = run.summary;
   const D = run.drawdownStartAge;
-  const latestAccess = latestAccessAgeF1(run, a);
+  const latestAccess = latestAccessAgeF1(run, a, w.order);
   const startRow = run.years.find((y) => y.age === D);
   const lockedPct =
     startRow && startRow.totalAte > 0 ? Math.round((startRow.locked / startRow.totalAte) * 100) : 0;
@@ -139,6 +197,11 @@ export function MilestonesPanel({
   return (
     <Card className="gap-1 p-4">
       <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">Milestones</h3>
+      {metrics.usedStrategySpending !== undefined && (
+        <p className="text-[11px] text-neutral-400" data-testid="milestones-fallback">
+          using strategy spending ({fmtMoney0(metrics.usedStrategySpending)}) — no FIRE target set
+        </p>
+      )}
       <Milestone label="Full FIRE age" value={age(metrics.fullAge)} />
       <Milestone label="Barista FIRE age" value={age(metrics.baristaAge)} />
       <Milestone label="Coast FIRE age" value={age(coastAge)} />
@@ -156,17 +219,19 @@ export function MilestonesPanel({
         }
       />
       <p className="mt-2 text-xs leading-5 text-neutral-600 dark:text-neutral-400" data-testid="readout">
-        At {D}, <strong>{lockedPct}%</strong> of your money is locked until{' '}
-        <strong>{latestAccess}</strong>
-        {bridge.years.length > 0 && (
+        {bridge.years.length > 0 ? (
           <>
-            ; bridge{' '}
+            At {D}, <strong>{lockedPct}%</strong> of your money is locked until{' '}
+            <strong>{latestAccess}</strong>; bridge{' '}
             {s.bridgeFunded
               ? 'fully funded'
               : lastFunded !== null
                 ? `funded through ${lastFunded}`
                 : 'not funded'}
           </>
+        ) : (
+          // M9.1 #4: no bridge → no locked-until sentence
+          <>Everything is open at your drawdown start ({D}) — no bridge needed</>
         )}
         . <strong>{formatSpans(s.spans, a.horizonAge)}</strong>.
         {(() => {
@@ -193,6 +258,10 @@ export function MilestonesPanel({
         {a.balances.taxable > 0 && a.balances.taxableBasis === undefined && (
           <> cost basis not entered — taxable withdrawals modeled tax-free.</>
         )}
+        {(() => {
+          const { caveat } = ladderDiagnosis(run, a, w);
+          return caveat ? <> {caveat.charAt(0).toUpperCase() + caveat.slice(1)}.</> : null;
+        })()}
       </p>
     </Card>
   );

@@ -45,6 +45,7 @@ import type {
   RunResult,
   RunSpan,
   RunYear,
+  WithdrawalSource,
   WithdrawalStrategy,
 } from './types';
 
@@ -413,21 +414,39 @@ export function simulateRun(
     },
   };
   // Bridge funded ⇔ no gap year between D and the latest access age
-  const latestAccess = latestAccessAgeF1(result, a);
+  const latestAccess = latestAccessAgeF1(result, a, w.order);
   result.summary.bridgeFunded = result.years
     .filter((y) => y.age >= D && y.age <= latestAccess)
     .every((y) => !y.gap);
   return result;
 }
 
-/** Latest access age across filers, in filer-1 age terms, clamped to the horizon. */
-export function latestAccessAgeF1(run: RunResult, a: Assumptions): number {
+/**
+ * Latest access age across filers, filer-1 terms, clamped to the horizon.
+ * M9.1 #1 guard: only sources PRESENT IN THE WITHDRAWAL ORDER extend the
+ * bridge — an unordered HSA (or any source the strategy never draws) must
+ * not stretch "locked until".
+ */
+export function latestAccessAgeF1(
+  run: RunResult,
+  a: Assumptions,
+  order: WithdrawalSource[],
+): number {
+  const sourceFor: Record<string, WithdrawalSource> = {
+    trad401k: 'preTax',
+    tradIra: 'preTax',
+    rothEarnings: 'rothEarnings',
+    hsa: 'hsa',
+  };
   const f1 = a.filers[0].currentAge;
   let latest = run.drawdownStartAge;
   run.access.forEach((acc, f) => {
     const offset = a.filers[f].currentAge - f1;
-    for (const v of Object.values(acc)) {
-      if (v !== undefined) latest = Math.max(latest, Math.ceil(v) - offset);
+    for (const [key, v] of Object.entries(acc)) {
+      if (v === undefined) continue;
+      const src = sourceFor[key];
+      if (src !== undefined && !order.includes(src)) continue;
+      latest = Math.max(latest, Math.ceil(v) - offset);
     }
   });
   return Math.min(latest, a.horizonAge);

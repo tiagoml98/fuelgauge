@@ -205,7 +205,7 @@ export function BridgeVisualizer({
             {anyConversions ? ' · seasoned conversions are carrying part of the bridge' : ''}
           </>
         ) : (
-          'no bridge years — everything is already open at drawdown start'
+          'no bridge needed — every account is open at your drawdown start'
         )}
       </p>
       {bridge.years.length > 0 && (

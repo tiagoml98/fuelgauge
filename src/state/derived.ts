@@ -18,7 +18,7 @@ import {
   fullFireAge,
 } from '../engine/metrics';
 import { simulateRun } from '../engine/run';
-import { toReal } from '../engine/schedule';
+import { resolveSchedule, toReal } from '../engine/schedule';
 import type {
   Assumptions,
   BridgeReport,
@@ -155,12 +155,26 @@ export interface DrawdownMetrics {
   millionAge: number | null;
   /** real ATE at drawdown start ÷ FIRE number − 1; null without a target. */
   marginOverTarget: number | null;
+  /** M9.1 #5: set when the metrics fell back to the strategy's own spending. */
+  usedStrategySpending?: number;
 }
 
 export function useDrawdownMetrics(run: RunResult | null, a: Assumptions, w: WithdrawalStrategy): DrawdownMetrics {
   return useMemo(() => {
     if (!run) return { fullAge: null, baristaAge: null, millionAge: null, marginOverTarget: null };
-    const spendReal = a.fireSpendingTarget > 0 ? a.fireSpendingTarget : null;
+    // M9.1 #5: no FIRE target → fall back to the strategy's own spending at
+    // the drawdown start (today's $ — the unindexed resolved row value)
+    const strategySpend =
+      resolveSchedule(w.spending, {
+        startAge: run.years[0].age,
+        endAge: a.horizonAge,
+        indexed: false,
+        inflation: 0,
+      })[run.drawdownStartAge - run.years[0].age] ?? 0;
+    const spendReal =
+      a.fireSpendingTarget > 0 ? a.fireSpendingTarget : strategySpend > 0 ? strategySpend : null;
+    const usedStrategySpending =
+      a.fireSpendingTarget <= 0 && strategySpend > 0 ? strategySpend : undefined;
     const startRow = run.years.find((y) => y.age === run.drawdownStartAge - 1) ?? run.years[0];
     const startAge = run.years[0].age;
     const margin =
@@ -175,6 +189,7 @@ export function useDrawdownMetrics(run: RunResult | null, a: Assumptions, w: Wit
         spendReal !== null ? baristaFireAge(run.years, a, spendReal, w, run.drawdownStartAge) : null,
       millionAge: firstAgeAtValue(run.years, 1_000_000, a.inflation),
       marginOverTarget: margin,
+      usedStrategySpending,
     };
   }, [run, a, w]);
 }

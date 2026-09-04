@@ -194,9 +194,9 @@ export function DrawdownTab() {
               {bridge && <BridgeVisualizer bridge={bridge} run={run} display={d} a={a} />}
 
               <div className="grid gap-3 xl:grid-cols-2">
-                <RateArbitragePanel a={a} run={run} />
+                <RateArbitragePanel a={a} run={run} w={strategy} />
                 {bridge && (
-                  <MilestonesPanel run={run} bridge={bridge} metrics={metrics} coastAge={coastAge} a={a} tiles={tiles} real={d.real} />
+                  <MilestonesPanel run={run} bridge={bridge} metrics={metrics} coastAge={coastAge} a={a} w={strategy} tiles={tiles} real={d.real} />
                 )}
               </div>
 

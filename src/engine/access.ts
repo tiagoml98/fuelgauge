@@ -36,9 +36,11 @@ export function computeAccessAges(a: Assumptions, g: GrowthScenario): AccessMap 
   return a.filers.map((filer, f) => {
     const override = a.accessAgeOverrides?.[f] ?? {};
     const separation = separationAge(g, f, filer.currentAge, filer.currentAge + n);
+    // M9.1 #1: the rule of 55 only ever OPENS EARLIER — a late separation
+    // (salary to the horizon) must never push access past 59½
     const ruleOf55 =
       separation !== null && separation >= RULE_OF_55_MIN_SEPARATION
-        ? separation
+        ? Math.min(separation, PRETAX_ACCESS_AGE)
         : PRETAX_ACCESS_AGE;
     return {
       trad401k: override.trad401k ?? ruleOf55,

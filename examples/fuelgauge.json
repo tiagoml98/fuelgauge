@@ -1,67 +1,31 @@
 {
   "schemaVersion": 1,
   "assumptions": {
-    "filers": [
-      {
-        "currentAge": 30
-      }
-    ],
+    "filers": [{ "currentAge": 27 }],
     "filingStatus": "single",
     "stateTaxRate": 0,
     "currentYear": 2026,
     "balances": {
       "perFiler": [
         {
-          "trad401k": 50000,
+          "trad401k": 64923.58,
           "tradIra": 0,
-          "tradIraBasis": 0,
-          "roth401k": 0,
-          "roth401kBasis": 0,
-          "rothIra": {
-            "basis": 0,
-            "conversions": [],
-            "earnings": 0,
-            "firstFundedYear": null
-          },
-          "hsa": 0
+          "roth401k": 94886.18,
+          "rothIra": { "basis": 16234, "conversions": [], "earnings": 0, "firstFundedYear": null },
+          "hsa": 5264
         }
       ],
-      "taxable": 0,
-      "taxableBasis": 0,
-      "cash": 0
+      "taxable": 149599,
+      "cash": 39640
     },
     "include": {
-      "trad401k": true,
-      "tradIra": true,
-      "roth401k": true,
-      "rothIra": true,
-      "hsa": true,
-      "taxable": true,
-      "cash": true
+      "trad401k": true, "tradIra": true, "roth401k": true, "rothIra": true,
+      "hsa": true, "taxable": true, "cash": true
     },
     "inflation": 0.03,
     "indexWithInflation": true,
-    "returnSchedule": [
-      {
-        "fromAge": 0,
-        "toAge": 50,
-        "value": 0.07
-      },
-      {
-        "fromAge": 51,
-        "toAge": null,
-        "value": 0.05
-      }
-    ],
-    "returnOverrides": {
-      "cash": [
-        {
-          "fromAge": 0,
-          "toAge": null,
-          "value": 0.04
-        }
-      ]
-    },
+    "returnSchedule": [{ "fromAge": 0, "toAge": null, "value": 0.07 }],
+    "returnOverrides": { "cash": [{ "fromAge": 0, "toAge": null, "value": 0.04 }] },
     "fees": 0.001,
     "dividendYield": 0.02,
     "dividendTaxRate": 0.15,
@@ -70,23 +34,16 @@
     "effectiveRetirementRate": 0.12,
     "ltcgRate": 0.15,
     "limits": {
-      "deferral401k": 24500,
-      "catchUp401k50": 8000,
-      "catchUp401k60to63": 11250,
-      "rothCatchUpWageThreshold": 150000,
-      "ira": 7500,
-      "iraCatchUp50": 1100,
-      "hsaSelfOnly": 4400,
-      "hsaFamily": 8750,
-      "hsaCatchUp55": 1000,
-      "overall415c": 72000
+      "deferral401k": 24500, "catchUp401k50": 8000, "catchUp401k60to63": 11250,
+      "rothCatchUpWageThreshold": 150000, "ira": 7500, "iraCatchUp50": 1100,
+      "hsaSelfOnly": 4400, "hsaFamily": 8750, "hsaCatchUp55": 1000, "overall415c": 72000
     },
     "hsaCoverage": "selfOnly",
     "horizonAge": 90,
     "hsaTreatment": "medical",
     "safeWithdrawalRate": 0.04,
-    "fireSpendingTarget": 70000,
-    "coastTargetAge": 63,
+    "fireSpendingTarget": 80000,
+    "coastTargetAge": 65,
     "baristaIncomeTarget": 0,
     "inPlanConversion": false,
     "inServiceWithdrawal": false,
@@ -98,36 +55,17 @@
       "name": "Base",
       "perFiler": [
         {
-          "salary": [],
-          "contrib401k": [
-            {
-              "fromAge": 27,
-              "toAge": null,
-              "value": 20000
-            },
-            {
-              "fromAge": 55,
-              "toAge": null,
-              "value": 0
-            }
-          ],
+          "salary": [{ "fromAge": 28, "toAge": null, "value": 200000 }],
+          "contrib401k": [{ "fromAge": 28, "toAge": 31, "value": 24500 }],
           "split401kRothPct": 0,
-          "contribIra": [],
+          "contribIra": [{ "fromAge": 28, "toAge": 31, "value": 7500 }],
           "splitIraRothPct": 1,
-          "backdoor": false,
-          "match": {
-            "mode": "percent",
-            "rate": 0,
-            "capPctOfSalary": 0,
-            "flatAmount": 0,
-            "destination": "trad401k",
-            "vestingPct": 1
-          },
-          "separationAgeOverride": 55
+          "backdoor": true,
+          "match": { "mode": "percent", "rate": 0, "capPctOfSalary": 0, "flatAmount": 0, "destination": "trad401k", "vestingPct": 1 }
         }
       ],
-      "hsaContrib": [],
-      "taxableContrib": [],
+      "hsaContrib": [{ "fromAge": 28, "toAge": 31, "value": 4400 }],
+      "taxableContrib": [{ "fromAge": 28, "toAge": null, "value": 40000 }],
       "cashContrib": [],
       "windfalls": []
     }
@@ -136,24 +74,15 @@
     {
       "id": "base",
       "name": "Base",
-      "spending": [],
+      "spending": [{ "fromAge": 28, "toAge": null, "value": 80000 }],
       "oneTimeExpenses": [],
       "income": [],
-      "order": [
-        "cash",
-        "taxable",
-        "preTax",
-        "rothBasis",
-        "seasonedConversions",
-        "rothEarnings"
-      ]
+      "order": ["cash", "taxable", "preTax", "rothBasis", "seasonedConversions", "rothEarnings"],
+      "drawdownStartAge": 49
     }
   ],
   "display": {
-    "real": true,
-    "ate": true,
-    "byBuckets": true,
-    "theme": "dark",
-    "yearlyTable": false
+    "real": true, "ate": true, "byBuckets": true, "theme": "light",
+    "yearlyTable": false, "activeTab": "drawdown"
   }
 }

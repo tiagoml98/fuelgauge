@@ -11,15 +11,15 @@
 ## 1. Three layers of state
 
 **Assumptions (global, one set)**
-- Filers: one or two; per filer current age, birth year, planned separation age. Filing status. Flat state-tax rate (default 0).
+- Filers: one or two; per filer current age (birth year is derived as current year − current age, M1 #4). Filing status. Flat state-tax rate (default 0). Separation age is per filer **per growth scenario** — derived as the last age with salary > 0, editable (gate decision 2).
 - Current balances per account (§2), with Roth IRA entered as basis / conversions (by year) / earnings, and Roth IRA first-funded year.
 - Per-account include toggle.
 - Inflation (3%). "Index with inflation" toggle (default on).
-- **Return schedule by age** (default: 7% until 50, 5% after) with optional per-account override. Fees / expense ratio subtracted. Taxable drag: dividend yield (2%) × dividend tax rate (15%).
+- **Return schedule by age** (default: 7% flat — M4.5 C.2 replaced the original 7%-then-5%-at-50, whose kink confused first use; age steps come from the "lower to X% from Y" quick action) with optional per-account override (cash defaults to 4%). Fees / expense ratio subtracted. Taxable drag: dividend yield (2%) × dividend tax rate (15%).
 - Tax mode: simple (marginal now 24%; effective on pre-tax withdrawals 12%, labeled "effective"; LTCG 15%) or bracket (Phase 2).
 - Contribution limits, editable and indexed; defaults = current IRS limits, **verify before shipping** (2026: deferral $24,500; IRA $7,500; HSA $4,400 / $8,750; 415(c) $72,000; catch-ups at 50+ and 60–63 per IRS).
-- Planning horizon (90). HSA treatment (medical / non-medical). Safe withdrawal rate (4%, tooltip: calibrated to ~30 years).
-- Plan toggles: in-plan conversion, in-service withdrawal, after-tax contributions allowed, match vesting %.
+- Planning horizon (90). HSA treatment (medical / non-medical). Safe withdrawal rate (4%; hint: divides straight into the FIRE number — 4% = 25× spending).
+- Plan toggles: in-plan conversion, in-service withdrawal, after-tax contributions allowed. (Match vesting % lives on each growth scenario's match config, beside rate/cap/destination.)
 
 **Growth scenarios (named, saved, many)** — everything about money going in:
 - Per filer: salary schedule; 401k total schedule + traditional/Roth split; IRA total schedule + split; "traditional IRA deductible" yes/no; backdoor toggle.
@@ -32,7 +32,7 @@
 - Drawdown start age.
 - Spending schedule (today's $) + one-time expense rows `{age, amount, label}`.
 - Retirement income rows: part-time work, pension, Social Security (tagged so bracket mode treats 85% as taxable).
-- Withdrawal order (drag list). Default: cash → invested taxable → Roth basis → seasoned conversions → pre-tax (once ≥ that account's access age) → Roth earnings (once ≥ access age). HSA not drawn under "medical."
+- Withdrawal order (drag list). Default (gate decision 5 — pre-tax ahead of Roth basis, self-adjusting around access ages): cash → invested taxable → pre-tax (once ≥ that account's access age) → Roth basis → seasoned conversions → Roth earnings (once ≥ access age). Under "medical" the HSA is not in the order: it pays the spending's medical slice first, tax-free at any age, and serves as last resort once every ordered source is exhausted or locked (M6.2 #2, ASSUMPTIONS M10).
 - Conversion ladder schedule (Phase 2): rows `{from, to, $}` or `{from, to, fill to top of N% bracket}`.
 
 **A run = one growth scenario × one withdrawal strategy.** The engine applies contributions only before the strategy's drawdown start age; if a growth scenario's schedules extend past it, they are cut there and a note says so.
@@ -48,17 +48,17 @@ Seven accounts, four buckets. Charts default to buckets; toggle "by account."
 | HSA | HSA | Contributions auto-stop at 65 |
 | Taxable | Invested taxable (cost basis tracked), Cash | Cash: own return (4%), basis = balance, no drag |
 
-At drawdown start, Traditional 401k → Traditional IRA and Roth 401k → Roth IRA (stated in UI). Unvested match dropped at separation.
+Traditional 401k → Traditional IRA at the **later of drawdown start and 59½** (so rule-of-55 withdrawals come from the plan until 59½, gate decision 6); Roth 401k → Roth IRA at drawdown start (both stated in UI). Unvested match dropped at separation.
 
-**Access ages:** pre-tax accounts default 59½. If a filer's separation age ≥ 55, Traditional 401k access = separation age (rule of 55), shown as an editable auto-fill. Roth earnings: 59½ and 5 years since first funding. RMD start age from birth year (73 for 1951–59, 75 for 1960+), used in Phase 2.5.
+**Access ages:** pre-tax accounts default 59½. If a filer's separation age ≥ 55, Traditional 401k access = separation age (rule of 55), shown as an editable auto-fill. Roth earnings: 59½ and 5 years since first funding. RMD start age from birth year (73 for 1951–59, 75 for 1960+), drives RMDs (§10.3, M10).
 
 ## 3. Tabs
 
 **Growth tab** — edit one growth scenario, save/duplicate/rename. Chart: stacked area of the four buckets from current age to horizon, **labeled "growth only — no withdrawals"**, with vertical markers at every windfall and at every contribution stop/reduce point. Hover shows each account's value at that age (real or nominal per toggle). Below: balance table every 5 years, expandable to yearly. Sidebar readouts: Coast FIRE age, $1M age, and the FIRE number for context.
 
-**Drawdown tab** — pick a growth scenario and a withdrawal strategy, edit the strategy, save/duplicate/rename. Chart: the same stacked area, now with real drawdown after the start age, a solid vertical line at drawdown start and a marker at each access age. Below it: the **bridge visualizer** (one bar per year from drawdown start to the latest access age; accessible sources stacked vs that year's need + conversion tax; green covered, red gap; header: total bridge cost vs funding, inflated spend at start and at access age). Sidebar: milestones (Full / Barista / Coast FIRE, $1M, bridge funded and first gap year, margin over target), the **rate-arbitrage panel** (marginal today vs effective in conversion years vs effective after access, one-line verdict), and the plain-language readout ("at 50, X% of your money is locked until Y; bridge funded through Z").
+**Drawdown tab** — pick a growth scenario and a withdrawal strategy, edit the strategy, save/duplicate/rename. Chart: the same stacked area, now with real drawdown after the start age, a solid vertical line at drawdown start and a marker at each access age. Below it: the **bridge visualizer** (one bar per year from drawdown start to the latest in-order access age; funded years stacked by source — outside money / seasoned conversions / other (§9-2.3) — vs that year's need; gaps red, with locked vs depleted counted apart in the summary; header: total bridge cost vs funding, inflated spend at start and at access age). Sidebar: milestones (Full / Barista / Coast FIRE, $1M, bridge funded and first gap year, margin over target), the **rate-arbitrage panel** (marginal today vs conversion-years average vs the computed rate at first pre-tax withdrawals, one-line verdict; drawdown-wide and RMD-years averages beneath), and the plain-language readout ("at 50, X% of your money is locked until Y; bridge funded through Z").
 
-**Compare tab** — a grid: rows = growth scenarios, columns = withdrawal strategies. Each cell shows the run's summary metrics: lifetime after-tax spending, terminal ATE at horizon, years retired, earliest drawdown age with no gaps, bridge funded (✓/✗), cumulative tax paid. Click cells to select; selected runs overlay their ATE totals on one chart with crossover ages marked, and a delta table shows differences against a chosen baseline run. Presets that create a scenario or strategy from the current one: "Roth 401k instead of traditional (equal take-home)," "Stop contributing at X," "Reduce to $Y at Z," "Retire at X instead," "Ladder bridge instead of outside-money bridge," "Stress: −20%, −10%, 0% in the first three drawdown years."
+**Compare tab** — a grid: rows = growth scenarios, columns = withdrawal strategies. Each cell shows the run's summary metrics: lifetime after-tax spending, terminal ATE at horizon, years retired, earliest drawdown age with no gaps, bridge funded (✓/✗), cumulative tax paid. Click cells to select; selected runs overlay their ATE totals on one chart with crossover ages marked, and a delta table shows differences against a chosen baseline run. Presets that create a scenario or strategy from the current one (spawned as experiments): "Traditional vs Roth (equal take-home)," "Stop contributing at X," "Reduce 401k to $Y at Z," "Retire at X vs Y," "Ladder bridge vs outside money," "Stress: −20%, −10%, 0% in the first three drawdown years," "Convert before RMDs vs don't" (§10.3).
 
 ## 4. Core modeling rules
 
@@ -66,7 +66,7 @@ At drawdown start, Traditional 401k → Traditional IRA and Roth 401k → Roth I
 - Timing: integer-year steps; contributions, windfalls, and growth at end of year; drawdown begins at the start of the drawdown-start year; withdrawals at the start of each drawdown year. Footnoted.
 - All schedules in today's dollars, indexed when the toggle is on.
 - All target comparisons (FIRE numbers, $1M, bridge sufficiency) in real terms.
-- **After-tax-equivalent (ATE)** is the default lens (toggle to gross): pre-tax × (1 − effective rate) (bracket mode: schedule); Roth and cash at face; HSA at face if medical else like pre-tax; taxable minus tax on embedded gain.
+- **After-tax-equivalent (ATE)** is the default lens (toggle to gross): pre-tax × (1 − rate), where simple mode uses the flat effective (+ state) and bracket mode the run's computed valuation rate (§10.1, ASSUMPTIONS T19); Roth and cash at face; HSA at face if medical else like pre-tax; taxable minus tax on embedded gain.
 
 ## 5. Schedules
 
@@ -75,7 +75,7 @@ Every dollar flow and every age-varying rate is a list of rows `{from age, to ag
 ## 6. Engine
 
 - Year by year to horizon per run. Each account compounds on that year's return net of fees; schedules applied and capped at limits (catch-ups by filer age); windfalls added to their target; drag applied; cost basis and Roth sub-balances tracked.
-- Drawdown: need = spending + one-time expenses − retirement income (all inflated). Withdrawals follow the strategy's order; pre-tax grossed up for tax, taxable for tax on the gain portion. Money before its access age is never drawn; if accessible sources run out, the year is a **gap** — reported, not covered.
+- Drawdown: need = spending + one-time expenses − retirement income (all inflated). Withdrawals follow the strategy's order; pre-tax grossed up for tax, taxable for tax on the gain portion. Money before its access age is never drawn; if accessible sources run out (including the HSA last resort under "medical"), the year is a **gap** — reported, not covered, and classified locked vs depleted (ASSUMPTIONS M26).
 - Per age per run: balance per account and bucket (gross and ATE), basis, total, accessible, locked, cumulative tax, gap flag.
 
 ## 7. Taxes
@@ -98,13 +98,15 @@ Fix take-home cost C. Path A: min(limit, C ÷ (1 − t_now)) pre-tax, remainder 
 ## 10. Assumptions panel (always visible) + disclaimer
 
 - Simple mode overstates retirement tax if a marginal rate is entered → biases toward Roth
-- No RMDs until 2.5 → biases against conversions
+- RMDs modeled from M10 (forced draws, surplus to taxable — ASSUMPTIONS T25–T28); the temporary 2025–28 senior deduction is not (T17)
 - Social Security only if entered as an income row (85% taxable in bracket mode)
 - Deterministic returns; the stress preset is a stand-in, not a probability
 - ACA subsidies before 65 not modeled — conversions during the bridge raise the income they're based on; check separately before acting on a ladder amount
 - IRMAA after 65 not modeled — large conversions or RMDs after 63 can trigger it
-- Windfalls entered after tax; HSA "medical" assumes qualified expenses ≥ balance; 401k → IRA rollover at drawdown start; backdoor pro-rata rule if any Traditional IRA balance
+- Windfalls entered after tax; HSA "medical" assumes qualified expenses ≥ balance; 401k → IRA rollover at the later of drawdown start and 59½; backdoor pro-rata rule if any Traditional IRA balance
 - **Prominent:** educational model, simplifying assumptions, not tax advice — confirm real decisions with a CPA.
+
+This list is the panel's charter; the panel itself renders `docs/ASSUMPTIONS.md` verbatim (one source of truth), which carries the complete, current set with bias directions.
 
 ### 10.1 Conversion ladder (as built, M8)
 
